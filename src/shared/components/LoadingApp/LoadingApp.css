@@ -1,0 +1,291 @@
+/* ─── LoadingApp — tela de carregamento Navemazônia ──────────────────────────
+ * Baseado no protótipo navemazonia-loading.html.
+ * CSS co-localizado, sem dependência do design system (que ainda não tem
+ * contexto garantido nessa fase) nem de bibliotecas de estilo.
+ */
+
+.nm-load {
+  --nm-bg-1: #0a2257;
+  --nm-bg-2: #041640;
+  --nm-gold: #f5b316;
+
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16px;
+  overflow: hidden;
+  color: #fff;
+  font-family: Montserrat, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+  background: radial-gradient(
+    ellipse at 50% 40%,
+    var(--nm-bg-1) 0%,
+    var(--nm-bg-2) 75%
+  );
+}
+
+/* ── Marca ─────────────────────────────────────────────────────────────────── */
+.nm-load__brand {
+  display: flex;
+  align-items: center;
+  gap: clamp(12px, 2vw, 24px);
+  opacity: 0;
+  animation: nm-fade-up 0.9s ease-out 0.1s forwards;
+}
+
+.nm-load__logo {
+  width: clamp(34px, 3.6vw, 52px);
+  height: auto;
+  filter: drop-shadow(0 4px 14px rgba(245, 179, 22, 0.25));
+}
+
+.nm-load__title {
+  margin: 0;
+  font-weight: 800;
+  font-size: clamp(20px, 3vw, 36px);
+  letter-spacing: 0.14em;
+  line-height: 1;
+}
+
+.nm-load__tagline {
+  margin-top: clamp(10px, 1.4vw, 16px);
+  padding-left: 0.4em;
+  color: var(--nm-gold);
+  font-weight: 700;
+  font-size: clamp(9px, 0.85vw, 12px);
+  letter-spacing: 0.4em;
+  opacity: 0;
+  animation: nm-fade-up 0.9s ease-out 0.3s forwards,
+    nm-pulse 2.4s ease-in-out 1.2s infinite;
+}
+
+/* ── Mensagem de status ────────────────────────────────────────────────────── */
+.nm-load__status {
+  margin-top: clamp(24px, 4vh, 40px);
+  color: #d6e0f2;
+  font-weight: 600;
+  font-size: clamp(13px, 1.4vw, 15px);
+  letter-spacing: 0.06em;
+  opacity: 0;
+  animation: nm-fade-up 0.9s ease-out 0.5s forwards;
+}
+
+.nm-load__dots::after {
+  content: "";
+  display: inline-block;
+  width: 1.2em;
+  text-align: left;
+  animation: nm-dots 1.4s steps(4, end) infinite;
+}
+
+/* ── Barra de progresso (indeterminada) ────────────────────────────────────── */
+.nm-load__progress {
+  position: relative;
+  width: min(300px, 70vw);
+  height: 4px;
+  margin-top: clamp(14px, 2vh, 20px);
+  border-radius: 99px;
+  background: rgba(120, 150, 200, 0.2);
+  overflow: hidden;
+  opacity: 0;
+  animation: nm-fade-up 0.9s ease-out 0.6s forwards;
+}
+
+.nm-load__progress-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 40%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--nm-gold), #ffd25a);
+  box-shadow: 0 0 10px rgba(245, 179, 22, 0.5);
+  animation: nm-progress-slide 1.6s ease-in-out infinite;
+}
+
+/* ── Cena (barco + ondas) ──────────────────────────────────────────────────── */
+.nm-load__scene {
+  position: relative;
+  width: min(380px, 80vw);
+  margin-top: clamp(24px, 4vh, 44px);
+  aspect-ratio: 640 / 230;
+}
+
+.nm-load__boat {
+  position: absolute;
+  left: 50%;
+  bottom: 22%;
+  width: 54%;
+  transform-origin: 50% 85%;
+  animation: nm-bob 3.2s ease-in-out infinite;
+}
+
+.nm-load__boat svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.nm-load__waves {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 4%;
+  width: 100%;
+  height: 34%;
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    #000 22%,
+    #000 78%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    #000 22%,
+    #000 78%,
+    transparent 100%
+  );
+}
+
+.nm-load__waves svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: hidden;
+}
+
+.nm-load__w-blue {
+  animation: nm-drift 3.2s linear infinite;
+}
+.nm-load__w-blue2 {
+  animation: nm-drift 4.6s linear infinite reverse;
+  opacity: 0.55;
+}
+.nm-load__w-gold {
+  animation: nm-drift 2.6s linear infinite;
+}
+
+/* ── Onda do rodapé ────────────────────────────────────────────────────────── */
+.nm-load__footer-wave {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 18vh;
+  min-height: 110px;
+  pointer-events: none;
+}
+
+.nm-load__footer-wave svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.nm-load__fw-fill {
+  animation: nm-drift-long 22s linear infinite;
+}
+.nm-load__fw-gold {
+  animation: nm-drift-long 16s linear infinite;
+}
+.nm-load__fw-blue {
+  animation: nm-drift-long 26s linear infinite reverse;
+}
+
+/* ── Keyframes ─────────────────────────────────────────────────────────────── */
+@keyframes nm-bob {
+  0% {
+    transform: translateX(-50%) translateY(0) rotate(-2.5deg);
+  }
+  50% {
+    transform: translateX(-50%) translateY(-7px) rotate(2.5deg);
+  }
+  100% {
+    transform: translateX(-50%) translateY(0) rotate(-2.5deg);
+  }
+}
+
+@keyframes nm-drift {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-160px);
+  }
+}
+
+@keyframes nm-drift-long {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-1600px);
+  }
+}
+
+@keyframes nm-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes nm-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@keyframes nm-dots {
+  0% {
+    content: "";
+  }
+  25% {
+    content: ".";
+  }
+  50% {
+    content: "..";
+  }
+  75%,
+  100% {
+    content: "...";
+  }
+}
+
+/* Barra indeterminada: desliza da esquerda para a direita em loop. */
+@keyframes nm-progress-slide {
+  0% {
+    left: -40%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+/* Acessibilidade: respeita preferência por menos movimento */
+@media (prefers-reduced-motion: reduce) {
+  .nm-load *,
+  .nm-load *::before,
+  .nm-load *::after {
+    animation-duration: 0s !important;
+    animation-iteration-count: 1 !important;
+  }
+  .nm-load__brand,
+  .nm-load__tagline {
+    opacity: 1;
+  }
+}
