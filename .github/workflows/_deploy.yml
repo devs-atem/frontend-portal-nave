@@ -17,7 +17,6 @@ on:
         default: ""
 
 permissions:
-  id-token: write
   contents: read
   packages: read
 
@@ -49,10 +48,11 @@ jobs:
           VITE_API_URL: ${{ inputs.api_url }}
         run: yarn build
 
-      - name: Configure AWS credentials (OIDC)
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::394234297757:role/github-frontend-portal-nave-deploy
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
       - uses: hashicorp/setup-terraform@v3
