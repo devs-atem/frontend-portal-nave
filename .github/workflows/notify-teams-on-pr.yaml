@@ -1,0 +1,143 @@
+name: Notify Teams on PR
+
+on:
+  pull_request:
+    # Nota: O tipo 'closed' dispara para PRs mergeadas E fechadas sem merge.
+    # PRs fechadas sem merge são filtradas pela condição 'if' do job (merged == true).
+    # Isso consome um slot de enfileiramento mas não gera billing significativo,
+    # pois o job é ignorado antes de executar qualquer step.
+    types: [review_requested, closed]
+  pull_request_review:
+    types: [submitted]
+    # Nota: Apenas reviews com estado 'approved' serão notificadas (filtrado no job)
+  workflow_dispatch:
+    inputs:
+      test_title:
+        description: "Título da PR (teste)"
+        default: "FEAT(SP-609): listagem por bpid e não cnpj/cpf"
+      test_branch:
+        description: "Branch (teste)"
+        default: "feat/SP-609"
+      test_body:
+        description: "Resumo (teste)"
+        default: "Adição de um select de BPIDs na consulta de preços"
+
+concurrency:
+  group: pr-notify-${{ github.event.pull_request.number || github.run_id }}-${{ github.event.action }}
+  cancel-in-progress: true
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request_review' && github.event.review.state == 'approved' && github.event.review.user.login != 'guardiaodaguarita[bot]') ||
+      (github.event.action == 'opened' && github.event.pull_request.draft == false) ||
+      (github.event.action == 'review_requested' && github.event.pull_request.draft == false) ||
+      (github.event.action == 'closed' && github.event.pull_request.merged == true)
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Determine notification title
+        id: notification
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          if [ "${{ github.event_name }}" == "pull_request_review" ]; then
+            REVIEWER="${{ github.event.review.user.login }}"
+            echo "title=✅ ${REVIEWER} aprovou a PR" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.action }}" == "closed" ] && [ "${{ github.event.pull_request.merged }}" == "true" ]; then
+            echo "title=✅ PR Mergeada" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.action }}" == "review_requested" ]; then
+            # Conta quantos revisores existiam ANTES desta adição
+            # A lista atual já inclui o recém-adicionado, então se há apenas 1 é a primeira vez
+            REVIEWER_COUNT=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}/requested_reviewers" \
+              --jq '.users | length' 2>/dev/null || echo "1")
+            if [ "$REVIEWER_COUNT" -le 1 ]; then
+              echo "title=🆕 Nova PR Aberta" >> "$GITHUB_OUTPUT"
+            else
+              echo "title=👀 Revisor Adicionado" >> "$GITHUB_OUTPUT"
+            fi
+          elif [ "${{ github.event.action }}" == "opened" ]; then
+            echo "title=🆕 Nova PR Aberta" >> "$GITHUB_OUTPUT"
+          else
+            echo "title=Abertura de PR" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Fetch review status
+        # PR_NUMBER será vazio em workflow_dispatch; nesse caso pula o step
+        if: ${{ github.event.pull_request.number != '' }}
+        id: reviews
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          # Busca revisores solicitados (pendentes)
+          REQUESTED=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}/requested_reviewers" \
+            --jq '[.users[].login] | join(" ")' 2>/dev/null || echo "")
+
+          # Busca reviews já submetidas (pega a mais recente de cada revisor)
+          REVIEWED=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}/reviews" \
+            --jq '[.[] | select(.state != "PENDING")] | group_by(.user.login) | map(last | .user.login) | join(" ")' 2>/dev/null || echo "")
+
+          # Busca apenas revisores que APROVARAM (estado mais recente = APPROVED)
+          APPROVED=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}/reviews" \
+            --jq '[.[] | select(.state != "PENDING")] | group_by(.user.login) | map(select(last.state == "APPROVED") | last.user.login) | join(" ")' 2>/dev/null || echo "")
+
+          echo "requested=$REQUESTED" >> "$GITHUB_OUTPUT"
+          echo "reviewed=$REVIEWED" >> "$GITHUB_OUTPUT"
+          echo "approved=$APPROVED" >> "$GITHUB_OUTPUT"
+
+      - name: Write team mapping file
+        env:
+          TEAM_USERS_MAPPING: ${{ secrets.TEAM_USERS_MAPPING }}
+        run: |
+          if [ -z "$TEAM_USERS_MAPPING" ]; then
+            echo "⚠️ TEAM_USERS_MAPPING não configurado, usando mapeamento vazio"
+            echo '{}' > /tmp/team-mapping.json
+          else
+            echo "$TEAM_USERS_MAPPING" | jq . > /tmp/team-mapping.json || { echo "❌ TEAM_USERS_MAPPING não é JSON válido"; exit 1; }
+          fi
+
+      - name: Resolve team members
+        id: teams
+        if: github.event.pull_request.number != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          REPO="${{ github.repository }}"
+
+          # Get requested teams from PR
+          REQUESTED_TEAMS=$(gh api "repos/$REPO/pulls/$PR_NUMBER/requested_reviewers" \
+            --jq '[(.teams // [])[].slug]' 2>/dev/null || echo "[]")
+
+          # Ensure valid JSON array
+          if ! echo "$REQUESTED_TEAMS" | jq -e 'type == "array"' >/dev/null 2>&1; then
+            REQUESTED_TEAMS="[]"
+          fi
+
+          echo "requested_teams=$(echo "$REQUESTED_TEAMS" | jq -c .)" >> "$GITHUB_OUTPUT"
+
+      - name: Notify Teams
+        env:
+          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+          PR_TITLE: ${{ github.event.pull_request.title || github.event.inputs.test_title || 'PR de teste' }}
+          PR_URL: ${{ github.event.pull_request.html_url || format('https://github.com/{0}', github.repository) }}
+          PR_BRANCH: ${{ github.event.pull_request.head.ref || github.event.inputs.test_branch || 'feat/teste' }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login || github.actor }}
+          REPO_NAME: ${{ github.event.repository.name }}
+          PR_BODY: ${{ github.event.pull_request.body || github.event.inputs.test_body || 'Teste de notificação' }}
+          REVIEWERS: ${{ join(github.event.pull_request.requested_reviewers.*.login, ' ') }}
+          REQUESTED_TEAMS: ${{ steps.teams.outputs.requested_teams || '[]' }}
+          REVIEWED_LOGINS: ${{ steps.reviews.outputs.reviewed }}
+          REQUESTED_LOGINS: ${{ steps.reviews.outputs.requested }}
+          APPROVED_LOGINS: ${{ steps.reviews.outputs.approved }}
+          IS_MERGED: ${{ github.event.pull_request.merged }}
+          NOTIFICATION_TITLE: ${{ steps.notification.outputs.title }}
+          MAPPING_FILE: /tmp/team-mapping.json
+        run: |
+          chmod +x .github/scripts/notify-teams.sh
+          .github/scripts/notify-teams.sh

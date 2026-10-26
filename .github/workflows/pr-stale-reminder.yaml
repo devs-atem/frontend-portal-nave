@@ -1,0 +1,34 @@
+name: Lembrete de PR Parada
+
+on:
+  schedule:
+    # Roda 2x por dia no expediente de Manaus (UTC-4): 10h e 15h
+    # 10h Manaus = 14h UTC | 15h Manaus = 19h UTC
+    - cron: '0 14,19 * * 1-5'
+  workflow_dispatch:
+
+jobs:
+  check-stale-prs:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+      contents: read
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Check stale PRs and notify Teams
+        env:
+          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TEAM_USERS_MAPPING: ${{ secrets.TEAM_USERS_MAPPING }}
+          MAPPING_FILE: /tmp/team-mapping.json
+        run: |
+          if [ -z "$TEAM_USERS_MAPPING" ]; then
+            echo "⚠️ TEAM_USERS_MAPPING não configurado, usando mapeamento vazio"
+            echo '{}' > /tmp/team-mapping.json
+          else
+            echo "$TEAM_USERS_MAPPING" | jq . > /tmp/team-mapping.json || { echo "❌ TEAM_USERS_MAPPING não é JSON válido"; exit 1; }
+          fi
+          chmod +x .github/scripts/pr-stale-reminder.sh
+          .github/scripts/pr-stale-reminder.sh
