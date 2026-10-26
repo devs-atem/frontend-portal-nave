@@ -53,3 +53,119 @@ button {
 ::-webkit-scrollbar-thumb:hover {
   background: #9ca3af;
 }
+
+/* ─── Navegação Navemazônia (Sidebar + AppBar azul marinho) ──────────────────
+ * A Sidebar do design system (v0.4.7) amarra o fundo da navegação ao token
+ * --atem-color-surface-content (mesmo da área de conteúdo), então não dá para
+ * separar via tema global. Estes overrides pintam só a sidebar e a topbar no
+ * azul do protótipo, mantendo o conteúdo claro.
+ */
+:root {
+  --nm-navy: #0d265e;
+  --nm-navy-hover: #1a3a7a;
+  --nm-orange: #f39200;
+  --nm-nav-text: #ffffff;
+  --nm-nav-text-dim: #c9d3e8;
+}
+
+/* O CSS do design system (sidebar.css) é importado dentro do JS do componente
+ * e entra no bundle DEPOIS deste arquivo. Com mesma especificidade (1 classe),
+ * a regra do DS venceria. Por isso aumentamos a especificidade prefixando com
+ * html:root para garantir que a identidade Navemazônia prevaleça. */
+
+/* AppBar (topbar) */
+html:root .atem-sidebar__topbar {
+  background: var(--nm-navy);
+  border-bottom: 3px solid var(--nm-orange);
+  color: var(--nm-nav-text);
+}
+
+/* Sidebar */
+html:root .atem-sidebar {
+  background: var(--nm-navy);
+  color: var(--nm-nav-text);
+  border-right: 1px solid var(--nm-navy-hover);
+}
+
+html:root .atem-sidebar__header,
+html:root .atem-sidebar__footer,
+html:root .atem-sidebar__drawer-header {
+  border-color: var(--nm-navy-hover);
+}
+
+/* Logo + nome de usuário em texto claro */
+html:root .atem-sidebar__logo,
+html:root .atem-sidebar__user-name,
+html:root .atem-sidebar__user-initials {
+  color: var(--nm-nav-text);
+}
+
+/* Avatar do usuário sobre o azul */
+html:root .atem-sidebar__user-avatar {
+  background: var(--nm-navy-hover);
+  color: var(--nm-nav-text);
+}
+
+/* Itens de menu */
+html:root .atem-sidebar__item,
+html:root .atem-sidebar__section-header {
+  color: var(--nm-nav-text-dim);
+}
+
+html:root .atem-sidebar__item:hover,
+html:root .atem-sidebar__item:focus,
+html:root .atem-sidebar__item:focus-visible,
+html:root .atem-sidebar__section-header:hover,
+html:root .atem-sidebar__section-header:focus,
+html:root .atem-sidebar__section-header:focus-visible {
+  background: var(--nm-navy-hover);
+  color: var(--nm-nav-text);
+}
+
+html:root .atem-sidebar__item--active {
+  background: var(--nm-navy-hover);
+  border-left-color: var(--nm-orange);
+  color: var(--nm-nav-text);
+}
+
+html:root .atem-sidebar__item--sub.atem-sidebar__item--active {
+  border-left-color: var(--nm-orange);
+}
+
+/* Botões da AppBar (toggle, ações, breadcrumbs) em claro */
+html:root .atem-sidebar__toggle,
+html:root .atem-sidebar__appbar-action,
+html:root .atem-sidebar__breadcrumbs-link,
+html:root .atem-sidebar__breadcrumbs-label,
+html:root .atem-sidebar__breadcrumbs-separator {
+  color: var(--nm-nav-text);
+  background: transparent;
+}
+
+html:root .atem-sidebar__toggle:hover,
+html:root .atem-sidebar__appbar-action:hover,
+html:root .atem-sidebar__user-link:hover,
+html:root .atem-sidebar__user-trigger:hover {
+  background: var(--nm-navy-hover);
+}
+
+/* Busca dentro da sidebar azul */
+html:root .atem-sidebar__search-input {
+  background: var(--nm-navy-hover);
+  border-color: var(--nm-navy-hover);
+  color: var(--nm-nav-text);
+}
+
+html:root .atem-sidebar__search-input::placeholder {
+  color: var(--nm-nav-text-dim);
+}
+
+/* Botão sair */
+html:root .atem-sidebar__logout {
+  color: var(--nm-nav-text-dim);
+}
+
+html:root .atem-sidebar__logout:hover {
+  background: var(--nm-navy-hover);
+  color: var(--nm-nav-text);
+}
