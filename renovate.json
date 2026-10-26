@@ -1,0 +1,4 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["github>devs-atem/renovate-config#v1.0.0", "github>devs-atem/renovate-config:ecma-script#v1.0.0"]
+}

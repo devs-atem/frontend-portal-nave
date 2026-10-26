@@ -1,0 +1,54 @@
+# mise — gerencia runtimes e tasks do projeto.
+# Instalação: https://mise.jdx.dev/getting-started.html
+# Uso: `mise install` para instalar os runtimes, `mise run <task>` para executar.
+
+[tools]
+node = { version = "24.21.0", postinstall = "corepack enable" }
+yarn = "4.18.1"
+
+[env]
+# Carrega automaticamente o .env ao entrar na pasta
+_.file = ".env"
+
+# ─── Tasks ───────────────────────────────────────────────────────────────
+
+[tasks.setup]
+description = "Wizard interativo: configura nome, auth provider, flags, etc."
+run = "node scripts/setup.mjs"
+
+[tasks.doctor]
+description = "Valida ambiente (node, yarn, .env, mise.toml)"
+run = "node scripts/doctor.mjs"
+
+[tasks.install]
+description = "Instala dependências com yarn"
+run = "yarn install"
+
+[tasks.dev]
+description = "Sobe o Vite em modo desenvolvimento"
+run = "yarn dev"
+
+[tasks.build]
+description = "Build de produção"
+run = "yarn build"
+
+[tasks.preview]
+description = "Preview do build de produção"
+run = "yarn preview"
+
+[tasks.lint]
+description = "Roda o linter"
+run = "yarn lint"
+
+[tasks.test]
+description = "Roda os testes"
+run = "yarn test"
+
+[tasks.generate]
+description = "Gera uma nova feature/module. Uso: mise run generate module --name=xxx"
+run = "node scripts/generate.mjs"
+
+[tasks.bootstrap]
+description = "install + setup em sequência (uso one-shot após clonar)"
+depends = ["install"]
+run = "node scripts/setup.mjs"

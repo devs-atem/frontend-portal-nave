@@ -1,0 +1,26 @@
+node_modules
+dist
+.vite
+coverage
+.yarn
+
+# Local env (não comita)
+.env
+.env.local
+.env.*.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editores
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea
+.DS_Store
+Thumbs.db
+
+# Testes
+*.lcov

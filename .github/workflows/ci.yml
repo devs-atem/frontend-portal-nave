@@ -1,0 +1,56 @@
+name: CI
+
+# Roda em qualquer PR aberto. Branch de destino não importa — é a mesma
+# bateria em qualquer merge target (dev, main, feature-branch).
+on:
+  pull_request:
+
+# Permissões mínimas:
+# - contents:read pro checkout
+# - packages:read pra baixar @devs-atem/design-system do GitHub Packages
+permissions:
+  contents: read
+  packages: read
+
+# Cancela runs anteriores da mesma PR se um novo push chegar.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Lint & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          # Versão alinhada ao mise.toml. Mantenha os dois em sincronia
+          # quando subir Node.
+          node-version: "24.21.0"
+
+      - name: Enable Corepack (Yarn 4)
+        run: corepack enable
+
+      - name: Install dependencies
+        env:
+          # Token default do workflow — tem acesso aos packages publicados
+          # na mesma org quando `permissions.packages: read` está setado.
+          # Se o design-system estiver em outra org/visibilidade, defina um
+          # secret `NPM_READ_TOKEN` com PAT que tenha `read:packages`.
+          GITHUB_TOKEN: ${{ secrets.NPM_READ_TOKEN || secrets.GITHUB_TOKEN }}
+        # --immutable: falha se o yarn.lock divergir do package.json,
+        # garantindo que a PR tá consistente.
+        run: yarn install --immutable
+
+      - name: Lint
+        run: yarn lint
+
+      - name: Test
+        # Roda mesmo se o lint falhou, pra o reviewer ver os dois
+        # resultados num só check.
+        if: always()
+        run: yarn test
