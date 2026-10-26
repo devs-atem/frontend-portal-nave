@@ -150,7 +150,7 @@ async function main() {
   });
   const rules = await ask(inq, "input", "rules", {
     message: "Identificador de permissão (rules):",
-    default: authProvider === "ream" ? "canal_cliente_ream" : "portal_generic",
+    default: authProvider === "ream" ? "canal_cliente_ream" : "portal_nave",
   });
   const adminRoles = await ask(inq, "input", "admin-roles", {
     message: "Roles de admin (separados por vírgula):",

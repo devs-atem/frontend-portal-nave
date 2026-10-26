@@ -5,11 +5,21 @@ on:
     branches:
       - master
       - main
-    types: [opened, synchronize, reopened]
+    # `edited` incluído para reagir quando a palavra "release" é adicionada ao
+    # título depois da abertura da PR.
+    types: [opened, synchronize, reopened, edited]
 
 jobs:
   update-deploy-description:
     runs-on: ubuntu-latest
+    # Só atualiza a descrição quando for o PR de release: head = `dev` (branch de
+    # integração) para base `main`/`master` E o título contiver a palavra "release".
+    # Isso evita reescrever a descrição de PRs comuns que porventura tenham base main.
+    if: >-
+      github.head_ref == 'dev' &&
+      (contains(github.event.pull_request.title, 'release') ||
+       contains(github.event.pull_request.title, 'Release') ||
+       contains(github.event.pull_request.title, 'RELEASE'))
     # Branch de integração onde as features são mescladas antes de subir pra
     # prod. É intencional e fixo: este workflow roda no PR de integração -> prod
     # (base master/main) e descreve o que foi acumulado em `dev`, independente
