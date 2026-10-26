@@ -24,3 +24,7 @@ Thumbs.db
 
 # Testes
 *.lcov
+
+# Terraform
+.terraform/
+*.tfstate*
