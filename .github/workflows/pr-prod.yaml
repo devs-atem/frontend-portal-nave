@@ -10,6 +10,12 @@ on:
 jobs:
   update-deploy-description:
     runs-on: ubuntu-latest
+    # Branch de integração onde as features são mescladas antes de subir pra
+    # prod. É intencional e fixo: este workflow roda no PR de integração -> prod
+    # (base master/main) e descreve o que foi acumulado em `dev`, independente
+    # de qual seja o base_ref do evento.
+    env:
+      INTEGRATION_BRANCH: dev
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -24,16 +30,16 @@ jobs:
         run: |
           LAST_PROD_DEPLOY_DATE=$(gh api repos/$GITHUB_REPOSITORY/commits/${{ github.base_ref }} --jq '.commit.committer.date')
           echo "LAST_PROD_DEPLOY_DATE=$LAST_PROD_DEPLOY_DATE" >> $GITHUB_ENV
-      - name: Listar PRs mescladas em dev desde o último deploy para ${{ github.base_ref }}
+      - name: Listar PRs mescladas em ${{ env.INTEGRATION_BRANCH }} desde o último deploy para ${{ github.base_ref }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          PR_TITLES=$(gh pr list --base dev --state merged --json number,title,mergedAt,author --jq '.[] | select(.mergedAt > '\"$LAST_PROD_DEPLOY_DATE\"') | "- [ ] [\(.title)](https://github.com/${{ github.repository }}/pull/\(.number)) by @\(.author.login)"' --limit 50)
+          PR_TITLES=$(gh pr list --base "$INTEGRATION_BRANCH" --state merged --json number,title,mergedAt,author --jq '.[] | select(.mergedAt > '\"$LAST_PROD_DEPLOY_DATE\"') | "- [ ] [\(.title)](https://github.com/${{ github.repository }}/pull/\(.number)) by @\(.author.login)"' --limit 50)
           if [ ! -z "$PR_TITLES" ]; then
             FORMATTED_PR_TITLES=$(echo "$PR_TITLES" | sed ':a;N;$!ba;s/\n/\\n/g')
             NEW_BODY="## Pull Request para Branch ${{ github.base_ref }}\n\n### Descrição\n\nEste Pull Request introduz as seguintes alterações:\n$FORMATTED_PR_TITLES\n\n### Dependências Externas\n\nAntes de mesclar este Pull Request, certifique-se de que as seguintes dependências externas estejam atualizadas ou configuradas corretamente:\n\n- [ ] As features foram testadas e validadas pelo QA.\n- [x] Back-end em ambiente de produção.\n- [x] A feature flag foi devidamente testada se existir.\n- [x] A documentação foi atualizada, se necessário."
             echo -e "$NEW_BODY" > body.md
             gh pr edit ${{ github.event.pull_request.number }} --body-file body.md
           else
-            echo "Nenhuma PR nova de 'dev' para '${{ github.base_ref }}' encontrada para listar."
+            echo "Nenhuma PR nova de '$INTEGRATION_BRANCH' para '${{ github.base_ref }}' encontrada para listar."
           fi
