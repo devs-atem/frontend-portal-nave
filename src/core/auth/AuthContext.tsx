@@ -158,7 +158,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   return (
     <AuthContext.Provider value={state}>
-      {state && state.token ? <>{children}</> : <LoadingApp />}
+      {state && state.token ? <>{ children }</> : <LoadingApp />}
     </AuthContext.Provider>
   );
 };

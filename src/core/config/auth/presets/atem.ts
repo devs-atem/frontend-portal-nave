@@ -5,8 +5,8 @@ import type { AuthPreset } from "../types";
  * Usado por: portal-vendas, portal-trading, portal-cliente, etc.
  */
 export const atemPreset: AuthPreset = {
-  productName: import.meta.env.VITE_APP_NAME ?? "portal-generic-atem",
-  rules: import.meta.env.VITE_AUTH_RULES ?? "portal_generic",
+  productName: import.meta.env.VITE_APP_NAME ?? "portal-nave-atem",
+  rules: import.meta.env.VITE_AUTH_RULES ?? "portal_nave",
 
   authApi: {
     url: {
