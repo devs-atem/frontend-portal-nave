@@ -1,0 +1,107 @@
+/* ─── Meu perfil — identidade Navemazônia ────────────────────────────────────
+ * Azul marinho #0D265E, laranja #F39200.
+ */
+
+.nm-perfil__hero {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 22px 24px;
+  border-radius: 12px;
+  background: linear-gradient(120deg, #0d265e, #1a3a7a);
+  color: #fff;
+  box-shadow: 0 8px 24px rgba(13, 38, 94, 0.18);
+}
+
+.nm-perfil__avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: #f39200;
+  color: #0d265e;
+  font-family: Montserrat, sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.nm-perfil__hero-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.nm-perfil__name {
+  font-family: Montserrat, sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.nm-perfil__role {
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffbd35;
+}
+
+.nm-perfil__email {
+  font-size: 13px;
+  color: #c9d3e8;
+}
+
+/* Grid de dados */
+.nm-perfil__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px 24px;
+  margin: 0;
+}
+
+.nm-perfil__grid dt {
+  font-size: 12px;
+  font-weight: 600;
+  color: #5b6475;
+  margin-bottom: 2px;
+}
+
+.nm-perfil__grid dd {
+  margin: 0;
+  font-size: 15px;
+  color: #171a21;
+}
+
+.nm-perfil__mono {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 13px;
+  color: #3d4556;
+  word-break: break-all;
+}
+
+/* Chips */
+.nm-perfil__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.nm-perfil__chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: #e8edf7;
+  color: #0d265e;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid #d3deef;
+}
+
+.nm-perfil__chip--muted {
+  background: #f1f3f7;
+  color: #3d4556;
+  font-weight: 500;
+  font-family: "JetBrains Mono", monospace;
+  border-color: #e2e6ee;
+}

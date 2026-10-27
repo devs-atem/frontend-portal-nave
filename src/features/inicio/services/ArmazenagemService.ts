@@ -101,6 +101,37 @@ export class ArmazenagemService {
       .sort((a, b) => b.litros - a.litros);
   }
 
+  /**
+   * Série diária de entradas × saídas (L) do cliente nos últimos N dias,
+   * com o saldo acumulado ao fim de cada dia. Usado no gráfico do dashboard.
+   */
+  movimentoDiarioDe(
+    cliente: ClienteFiltro,
+  ): Array<{ data: Date; ent: number; sai: number; saldo: number }> {
+    const rows =
+      cliente === "all"
+        ? this.movimentos
+        : this.movimentos.filter((m) => m.clienteId === cliente);
+
+    // Agrega por dia (somando todos os produtos/clientes do escopo).
+    const map = new Map<number, { data: Date; ent: number; sai: number; saldo: number }>();
+    for (const m of rows) {
+      const key = new Date(m.data).setHours(0, 0, 0, 0);
+      const acc = map.get(key) ?? {
+        data: new Date(key),
+        ent: 0,
+        sai: 0,
+        saldo: 0,
+      };
+      acc.ent += m.ent;
+      acc.sai += m.sai;
+      acc.saldo += m.saldo;
+      map.set(key, acc);
+    }
+
+    return [...map.values()].sort((a, b) => a.data.getTime() - b.data.getTime());
+  }
+
   private mesmoDia(d: Date, offset: number): boolean {
     const x = new Date(this.hoje);
     x.setDate(x.getDate() + offset);

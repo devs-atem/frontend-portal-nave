@@ -4,10 +4,11 @@ import { Card, KpiCard, PageTitleCard, StatusTag, Typography } from "@devs-atem/
 
 import { useIoC } from "@shared/hooks/useIoC";
 import { useClienteAtivo } from "@shared/hooks/useClienteAtivo";
-import { ClienteSelector } from "@shared/components/ClienteSelector";
-import { BarMeter } from "@shared/components/BarMeter";
 import { OccupancyTank } from "@shared/components/OccupancyTank";
 import { fDH, fH, fN, fPct, statusToTag } from "@shared/domain";
+import { BalanceByProductChart } from "../components/BalanceByProductChart";
+import { InboundOutboundChart } from "../components/InboundOutboundChart";
+import "../components/charts.css";
 
 const sectionCard: CSSProperties = {
   background: "#FFFFFF",
@@ -27,7 +28,7 @@ export const InicioPage = () => {
   const kpis = svc.kpisDashboard(cliente);
   const tqs = svc.tanquesDe(cliente);
   const prodBars = svc.saldoPorProduto(cliente);
-  const maxProd = Math.max(1, ...prodBars.map((b) => b.litros));
+  const movimento = svc.movimentoDiarioDe(cliente);
   const prox = svc.proximosAgendamentos(cliente);
   const nfs = svc.nfesDe(cliente).slice(0, 5);
   const alertas = svc.alertas(cliente).slice(0, 7);
@@ -37,33 +38,26 @@ export const InicioPage = () => {
       <PageTitleCard
         title="Início"
         subtitle="Visão geral do seu produto no terminal"
-        actions={<ClienteSelector />}
       />
 
       {/* KPIs */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(230px,1fr))", gap: 14 }}>
-        <KpiCard label="Saldo disponível" value={`${fN(kpis.disponivel)} L`} icon="Droplet" status="info" subValue={`${fN(kpis.disponivelKg)} kg`} />
+        <KpiCard label="Saldo total disponível" value={`${fN(kpis.disponivel)} L`} icon="Droplet" status="info" subValue={`${fN(kpis.disponivelKg)} kg`} />
         <KpiCard label="Saldo bloqueado" value={`${fN(kpis.bloqueado)} L`} icon="Lock" status="warning" subValue={`${fN(kpis.bloqueadoKg)} kg`} />
-        <KpiCard label="Veículos no terminal" value={String(kpis.veiculosNoTerminal)} icon="Truck" status="default" subValue={`${kpis.veiculosEmOperacao} em operação`} />
-        <KpiCard label="Agendamentos de hoje" value={String(kpis.agendamentosHoje)} icon="CalendarCheck" status="default" />
+        <KpiCard label="Veículos no terminal agora" value={String(kpis.veiculosNoTerminal)} icon="Truck" status="default" subValue={`${kpis.veiculosEmOperacao} em operação`} />
+        <KpiCard label="Agendamentos de hoje" value={String(kpis.agendamentosHoje)} icon="CalendarCheck" status="default" subValue={`${kpis.agendamentosHoje} concluídos`} />
         <KpiCard label="Descargas no mês" value={String(kpis.descargasMes)} icon="ArrowDownToLine" status="success" subValue={`${fN(kpis.litrosRecebidosMes)} L recebidos`} />
         <KpiCard label="Cargas no mês" value={String(kpis.cargasMes)} icon="ArrowUpFromLine" status="success" subValue={`${fN(kpis.litrosExpedidosMes)} L expedidos`} />
       </div>
 
-      {/* Saldo por produto */}
-      <div style={sectionCard}>
-        <Typography.H4>Saldo disponível por produto</Typography.H4>
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {prodBars.map((b) => (
-            <BarMeter
-              key={b.produtoId}
-              label={svc.prod(b.produtoId).nome}
-              ratio={b.litros / maxProd}
-              value={`${fN(b.litros)} L`}
-              color={svc.corProduto(b.produtoId)}
-            />
-          ))}
-        </div>
+      {/* Gráficos: saldo por produto + entradas × saídas */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,440px),1fr))", gap: 14 }}>
+        <BalanceByProductChart
+          dados={prodBars}
+          nomeProduto={(id) => svc.prod(id).nome}
+          corProduto={(id) => svc.corProduto(id)}
+        />
+        <InboundOutboundChart dados={movimento} />
       </div>
 
       {/* Ocupação dos tanques */}
