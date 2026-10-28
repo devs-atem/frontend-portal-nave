@@ -6,7 +6,7 @@ import {
   type ReactNode,
 } from "react";
 
-import type { ClienteFiltro } from "@features/inicio/services/ArmazenagemService";
+import type { ClienteFiltro } from "@features/dashboard/services/ArmazenagemService";
 
 interface ClienteAtivoContextValue {
   cliente: ClienteFiltro;

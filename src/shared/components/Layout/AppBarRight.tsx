@@ -5,7 +5,7 @@ import { Bell, User, LogOut } from "lucide-react";
 import { useAuth } from "@core/auth/AuthContext";
 import { useClienteAtivo } from "@shared/hooks/useClienteAtivo";
 import { useIoC } from "@shared/hooks/useIoC";
-import type { ClienteFiltro } from "@features/inicio/services/ArmazenagemService";
+import type { ClienteFiltro } from "@features/dashboard/services/ArmazenagemService";
 import "./AppBarRight.css";
 
 interface AppBarRightProps {

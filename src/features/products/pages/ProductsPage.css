@@ -1,0 +1,57 @@
+/* ─── Products — catálogo e vínculos com clientes ────────────────────────────
+ * Paleta Navemazônia (#0D265E / #F39200).
+ */
+
+.nm-prod__cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.nm-prod__dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.06);
+}
+
+.nm-prod__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #0d265e;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+}
+
+.nm-prod__titulo {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nm-prod__count {
+  font-size: 12px;
+  font-weight: 600;
+  color: #0d265e;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Barra de filtros */
+.nm-prod__filtros {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  background: #ffffff;
+  border: 1px solid #e2e6ee;
+  border-radius: 12px;
+  padding: 14px 16px;
+}

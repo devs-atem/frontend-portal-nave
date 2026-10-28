@@ -2,7 +2,7 @@ import { Select } from "@devs-atem/design-system";
 
 import { useIoC } from "@shared/hooks/useIoC";
 import { useClienteAtivo } from "@shared/hooks/useClienteAtivo";
-import type { ClienteFiltro } from "@features/inicio/services/ArmazenagemService";
+import type { ClienteFiltro } from "@features/dashboard/services/ArmazenagemService";
 
 interface ClienteSelectorProps {
   /** Permite a opção "Todos os clientes" (visão operador). */
