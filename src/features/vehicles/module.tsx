@@ -1,6 +1,6 @@
 import type { Module } from "@core/router/module.contract";
-import { VeiculosPage } from "./pages/VeiculosPage";
-import { AgendamentosPage } from "./pages/AgendamentosPage";
+import { VeiculosPage } from "./pages/VehiclesPage";
+import { AgendamentosPage } from "./pages/SchedulesPage";
 import { NovoAgendamentoPage } from "./pages/NovoAgendamentoPage";
 
 const veiculosModule: Module = {

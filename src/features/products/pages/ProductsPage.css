@@ -9,26 +9,28 @@
   min-width: 0;
 }
 
-.nm-prod__dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
+/* Seta de expandir/colapsar na linha-pai.
+ * Fechada → aponta para a direita (-90°). Aberta → aponta para baixo (0°).
+ * O DS aplica `atem-table__tr--expanded-parent` na linha-pai enquanto expandida. */
+.nm-prod__chevron {
   flex-shrink: 0;
-  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.06);
+  color: #0d265e;
+  opacity: 0.55;
+  transform: rotate(-90deg);
+  transition: transform 0.15s ease, opacity 0.15s ease;
 }
 
-.nm-prod__badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2px 6px;
-  border-radius: 4px;
-  background: #0d265e;
-  color: #fff;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
+.atem-table__tr--expanded-parent .nm-prod__chevron {
+  transform: rotate(0deg);
+  opacity: 1;
+}
+
+.nm-prod__dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
   flex-shrink: 0;
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.05);
 }
 
 .nm-prod__titulo {
@@ -38,20 +40,266 @@
 }
 
 .nm-prod__count {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12px;
   font-weight: 600;
   color: #0d265e;
   font-variant-numeric: tabular-nums;
+  background: rgba(13, 38, 94, 0.06);
+  border: 1px solid rgba(13, 38, 94, 0.12);
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+
+.nm-prod__count svg {
+  color: #0d265e;
+  opacity: 0.7;
+}
+
+.nm-prod__muted {
+  color: #9aa3b5;
+}
+
+/* ─── Tag de grupo (pill colorida) ──────────────────────────────────────────
+ * Tons suaves derivados da paleta do projeto. Fundo claro + texto saturado da
+ * mesma família, para legibilidade mantendo a identidade visual. */
+.nm-prod__tag {
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 5px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+/* Neutro = azul Navemazônia (#0D265E) */
+.nm-prod__tag--neutral {
+  background: rgba(13, 38, 94, 0.08);
+  color: #0d265e;
+}
+
+/* Biodiesel = roxo */
+.nm-prod__tag--biodiesel {
+  background: rgba(168, 85, 199, 0.14);
+  color: #7a2a93;
+}
+
+/* Etanol = verde */
+.nm-prod__tag--etanol {
+  background: rgba(22, 163, 120, 0.14);
+  color: #0f7a56;
+}
+
+/* Gasolina = azul da paleta */
+.nm-prod__tag--gasolina {
+  background: rgba(13, 38, 94, 0.1);
+  color: #0d265e;
+}
+
+/* Diesel = laranja Navemazônia (#F39200) */
+.nm-prod__tag--diesel {
+  background: rgba(243, 146, 0, 0.16);
+  color: #b96c00;
 }
 
 /* Barra de filtros */
 .nm-prod__filtros {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 10px;
   background: #ffffff;
   border: 1px solid #e2e6ee;
   border-radius: 12px;
   padding: 14px 16px;
+}
+
+/* Estado de erro da fronteira de carregamento */
+.nm-prod__error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  text-align: center;
+  background: #ffffff;
+  border: 1px solid #e2e6ee;
+  border-radius: 12px;
+  padding: 40px 24px;
+}
+
+.nm-prod__error-msg {
+  margin: 0;
+  font-size: 14px;
+  color: #0d265e;
+}
+
+/* ─── Drawer lateral de detalhes ────────────────────────────────────────────
+ * Paleta Navemazônia (#0D265E / #F39200). Cada informação aparece uma só vez. */
+.nm-prod__drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(13, 38, 94, 0.28);
+  z-index: 40;
+  animation: nm-prod-fade 0.15s ease;
+}
+
+.nm-prod__drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100vh;
+  width: min(420px, 92vw);
+  background: #ffffff;
+  border-left: 1px solid #e2e6ee;
+  box-shadow: -8px 0 24px rgba(13, 38, 94, 0.12);
+  z-index: 41;
+  display: flex;
+  flex-direction: column;
+  padding: 20px 22px;
+  gap: 18px;
+  overflow-y: auto;
+  animation: nm-prod-slide 0.18s ease;
+}
+
+@keyframes nm-prod-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes nm-prod-slide {
+  from { transform: translateX(16px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.nm-prod__drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.nm-prod__drawer-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+  color: #0d265e;
+  min-width: 0;
+}
+
+.nm-prod__drawer-title strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nm-prod__drawer-close {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid #e2e6ee;
+  border-radius: 8px;
+  background: #fff;
+  color: #0d265e;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.nm-prod__drawer-close:hover {
+  background: rgba(13, 38, 94, 0.06);
+}
+
+.nm-prod__dot--lg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Metadados do item (grid de pares rótulo/valor) */
+.nm-prod__drawer-meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 18px;
+  margin: 0;
+  padding: 16px;
+  background: rgba(13, 38, 94, 0.03);
+  border: 1px solid #e2e6ee;
+  border-radius: 12px;
+}
+
+.nm-prod__drawer-meta dt {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #9aa3b5;
+  margin-bottom: 4px;
+}
+
+.nm-prod__drawer-meta dd {
+  margin: 0;
+  font-size: 14px;
+  color: #0d265e;
+  font-weight: 500;
+}
+
+/* Seção de vinculados */
+.nm-prod__drawer-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  font-size: 14px;
+  color: #0d265e;
+}
+
+.nm-prod__drawer-section-title svg {
+  color: #0d265e;
+  opacity: 0.7;
+}
+
+.nm-prod__linked {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.nm-prod__linked-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid #e2e6ee;
+  border-radius: 10px;
+}
+
+.nm-prod__linked-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.nm-prod__linked-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0d265e;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nm-prod__linked-sub {
+  font-size: 12px;
+  color: #6b7488;
 }

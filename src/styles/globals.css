@@ -172,6 +172,16 @@ html:root .atem-sidebar__logout:hover {
   color: var(--nm-nav-text);
 }
 
+/* ─── Tabs (CustomTabs) no azul Navemazônia ──────────────────────────────────
+ * Por padrão o CustomTabs usa o `--atem-color-primary` do tema (vermelho) na
+ * tab ativa. No portal, a identidade é o azul marinho, então sobrescrevemos as
+ * variáveis internas do componente globalmente — vale para todas as abas. */
+.atem-custom-tabs {
+  --_custom-tabs-trigger-active-color: var(--nm-navy);
+  --_custom-tabs-trigger-active-border: var(--nm-navy);
+  --_custom-tabs-trigger-hover-color: var(--nm-navy);
+}
+
 /* ─── Ícones da navegação em amarelo ─────────────────────────────────────────
  * Os ícones (lucide-react) usam `stroke: currentColor`, então herdavam a cor
  * do texto do item (--nm-nav-text-dim, azul claro), que some sobre o azul

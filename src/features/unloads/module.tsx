@@ -1,6 +1,6 @@
 import type { Module } from "@core/router/module.contract";
-import { DescargasLotePage } from "./pages/DescargasLotePage";
-import { DescargasPeriodoPage } from "./pages/DescargasPeriodoPage";
+import { DescargasLotePage } from "./pages/UnloadsByBatchPage";
+import { DescargasPeriodoPage } from "./pages/UnloadsByPeriodPage";
 
 const descargasModule: Module = {
   name: "descargas",

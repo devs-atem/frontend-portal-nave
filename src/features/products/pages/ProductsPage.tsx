@@ -1,10 +1,13 @@
-import { useMemo, useState } from "react";
-import { Search } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ChevronDown, Search, Users, X } from "lucide-react";
+import { toast } from "sonner";
 import {
   Button,
+  CustomTabs,
   Input,
   PageTitleCard,
   Select,
+  Skeleton,
   StatusTag,
   Table,
   type TableColumn,
@@ -42,12 +45,62 @@ const STATUS_LABEL: Record<StatusFilter, string> = {
   inactive: "Somente inativos",
 };
 
+/**
+ * Mapeia o grupo do produto para um "tom" de tag. Os tons são estáveis por
+ * família de combustível; qualquer grupo não mapeado cai no tom neutro (azul
+ * da paleta Navemazônia). As cores reais vivem no CSS (`.nm-prod__tag--*`),
+ * todas derivadas da paleta do projeto.
+ */
+const groupTone = (group: string): string => {
+  const g = group.toLowerCase();
+  if (g.includes("biodiesel")) return "biodiesel";
+  if (g.includes("etanol")) return "etanol";
+  if (g.includes("gasolina")) return "gasolina";
+  if (g.includes("diesel")) return "diesel";
+  return "neutral";
+};
+
 export const ProductsPage = () => {
   const svc = useIoC("products");
   const [view, setView] = useState<View>("product");
   const [search, setSearch] = useState("");
   const [group, setGroup] = useState<string>("all");
   const [status, setStatus] = useState<StatusFilter>("all");
+  // Linha-pai selecionada → abre o painel lateral de detalhes.
+  const [selected, setSelected] = useState<Row | null>(null);
+
+  // Fronteira de carregamento dos dados: dispara `svc.load()` uma vez na
+  // montagem e acompanha os estados de carregamento/erro. Sob o mock o load
+  // resolve imediatamente, então estes estados são inertes e a página renderiza
+  // como hoje.
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+  // Incrementado pelo botão "Tentar novamente" para reexecutar o efeito.
+  const [retryToken, setRetryToken] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    svc
+      .load()
+      .then(() => {
+        if (!cancelled) setLoading(false);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        const normalized =
+          err instanceof Error ? err : new Error("Falha ao carregar os dados.");
+        setError(normalized);
+        setLoading(false);
+        toast.error(normalized.message);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [svc, retryToken]);
+
+  const retry = useCallback(() => setRetryToken((t) => t + 1), []);
 
   /** Grupos únicos para o filtro (apenas na visão por produto). */
   const groups = useMemo(
@@ -163,18 +216,22 @@ export const ProductsPage = () => {
     {
       id: "title",
       label: view === "product" ? "Produto / Cliente" : "Cliente / Produto",
-      accessor: (r) => (
+      accessor: (r) => r.title,
+      render: (_value, r) => (
         <span className="nm-prod__cell">
-          {r.kind === "product" ? (
+          {r.children && r.children.length > 0 && (
+            <ChevronDown
+              size={16}
+              className="nm-prod__chevron"
+              aria-hidden="true"
+            />
+          )}
+          {r.kind === "product" && (
             <span
               className="nm-prod__dot"
               style={{ background: r.color ?? "#ccc" }}
               aria-hidden="true"
             />
-          ) : (
-            <span className="nm-prod__badge" aria-hidden="true">
-              CLI
-            </span>
           )}
           <span className="nm-prod__titulo">{r.title}</span>
         </span>
@@ -187,15 +244,25 @@ export const ProductsPage = () => {
       id: "group",
       label: "Grupo",
       accessor: (r) => (r.kind === "product" ? r.group : "—"),
+      render: (_value, r) => {
+        if (r.kind !== "product" || !r.group) return <span className="nm-prod__muted">—</span>;
+        return (
+          <span className={`nm-prod__tag nm-prod__tag--${groupTone(r.group)}`}>
+            {r.group}
+          </span>
+        );
+      },
     },
     {
       id: "status",
       label: view === "product" ? "Clientes / Status" : "Produtos / Status",
       align: "right",
-      accessor: (r) => {
+      accessor: (r) => r.title,
+      render: (_value, r) => {
         if (r.children) {
           return (
             <span className="nm-prod__count">
+              <Users size={14} aria-hidden="true" />
               {r.links} {r.kind === "product" ? "cliente(s)" : "produto(s)"}
             </span>
           );
@@ -209,32 +276,49 @@ export const ProductsPage = () => {
             />
           );
         }
-        return "—";
+        return <span className="nm-prod__muted">—</span>;
       },
     },
   ];
+
+  // ─── Fronteira de carregamento ────────────────────────────────────────────
+  // Estado de carregamento: exibe um skeleton de tabela enquanto `load()` está
+  // pendente (inerte sob o mock, que resolve imediatamente).
+  if (loading) {
+    return (
+      <div style={{ padding: "24px 28px", display: "flex", flexDirection: "column", gap: 18 }}>
+        <PageTitleCard
+          title="Produtos"
+          subtitle="Catálogo de produtos e seus vínculos com clientes"
+        />
+        <Skeleton.Table rows={6} columns={5} showHeader />
+      </div>
+    );
+  }
+
+  // Estado de erro: mensagem + ação de nova tentativa.
+  if (error) {
+    return (
+      <div style={{ padding: "24px 28px", display: "flex", flexDirection: "column", gap: 18 }}>
+        <PageTitleCard
+          title="Produtos"
+          subtitle="Catálogo de produtos e seus vínculos com clientes"
+        />
+        <div className="nm-prod__error">
+          <p className="nm-prod__error-msg">{error.message}</p>
+          <Button variant="contained" onClick={retry}>
+            Tentar novamente
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ padding: "24px 28px", display: "flex", flexDirection: "column", gap: 18 }}>
       <PageTitleCard
         title="Produtos"
         subtitle="Catálogo de produtos e seus vínculos com clientes"
-        actions={
-          <div style={{ display: "flex", gap: 8 }}>
-            <Button
-              variant={view === "product" ? "contained" : "outlined"}
-              onClick={() => setView("product")}
-            >
-              Por produto
-            </Button>
-            <Button
-              variant={view === "client" ? "contained" : "outlined"}
-              onClick={() => setView("client")}
-            >
-              Por cliente
-            </Button>
-          </div>
-        }
       />
 
       {/* Filtros */}
@@ -249,7 +333,7 @@ export const ProductsPage = () => {
           leadingIcon={<Search size={16} />}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          style={{ flex: "1 1 280px" }}
+          style={{ flex: "1 1 0", minWidth: 0 }}
         />
 
         {view === "product" && (
@@ -281,15 +365,156 @@ export const ProductsPage = () => {
         )}
       </div>
 
+      {/* Alternância de visão — acima da tabela */}
+      <CustomTabs
+        className="nm-prod__tabs"
+        value={view}
+        onChange={(v) => setView(v as View)}
+        aria-label="Visualização de produtos"
+      >
+        <CustomTabs.List aria-label="Alternar entre visão por produto e por cliente">
+          <CustomTabs.Tab value="product">Por produto</CustomTabs.Tab>
+          <CustomTabs.Tab value="client">Por cliente</CustomTabs.Tab>
+        </CustomTabs.List>
+      </CustomTabs>
+
       <Table<Row>
         columns={columns}
         data={data}
         title={view === "product" ? "Produtos" : "Clientes"}
         getSubRows={(r) => r.children}
         expandAllControl
+        onRowClick={(r) => setSelected(r)}
         emptyMessage="Nenhum registro encontrado para os filtros aplicados"
       />
+
+      {selected && (
+        <DetailsDrawer row={selected} view={view} onClose={() => setSelected(null)} />
+      )}
     </div>
+  );
+};
+
+/**
+ * Painel lateral de detalhes da linha-pai selecionada.
+ *
+ * Princípio: cada informação aparece UMA ÚNICA VEZ. Os metadados do item-pai
+ * (sigla/CNPJ, código e — quando produto — grupo) ficam só no topo; a lista de
+ * vinculados mostra apenas o que é específico de cada vínculo, sem repetir os
+ * campos já exibidos no cabeçalho.
+ */
+interface DetailsDrawerProps {
+  row: Row;
+  view: View;
+  onClose: () => void;
+}
+
+const DetailsDrawer = ({ row, view, onClose }: DetailsDrawerProps) => {
+  const isProduct = row.kind === "product";
+  const children = row.children ?? [];
+  // Rótulo da relação conforme a visão atual.
+  const linkedLabel = view === "product" ? "Clientes vinculados" : "Produtos vinculados";
+  // Nos filhos de um produto (clientes), `sub` = CNPJ. Nos filhos de um cliente
+  // (produtos), `sub` = sigla. Rotulamos a coluna de acordo.
+  const childSubLabel = isProduct ? "CNPJ" : "Sigla";
+
+  return (
+    <>
+      <div className="nm-prod__drawer-overlay" onClick={onClose} aria-hidden="true" />
+      <aside className="nm-prod__drawer" role="dialog" aria-label={`Detalhes de ${row.title}`}>
+        <header className="nm-prod__drawer-head">
+          <span className="nm-prod__drawer-title">
+            {isProduct && (
+              <span
+                className="nm-prod__dot nm-prod__dot--lg"
+                style={{ background: row.color ?? "#ccc" }}
+                aria-hidden="true"
+              />
+            )}
+            <strong>{row.title}</strong>
+          </span>
+          <button className="nm-prod__drawer-close" onClick={onClose} aria-label="Fechar">
+            <X size={18} />
+          </button>
+        </header>
+
+        {/* Metadados do item — exibidos UMA única vez */}
+        <dl className="nm-prod__drawer-meta">
+          <div>
+            <dt>{isProduct ? "Sigla" : "CNPJ"}</dt>
+            <dd>{row.sub || "—"}</dd>
+          </div>
+          <div>
+            <dt>Código</dt>
+            <dd>{row.code || "—"}</dd>
+          </div>
+          {isProduct && (
+            <div>
+              <dt>Grupo</dt>
+              <dd>
+                <span className={`nm-prod__tag nm-prod__tag--${groupTone(row.group)}`}>
+                  {row.group}
+                </span>
+              </dd>
+            </div>
+          )}
+          {isProduct && (
+            <div>
+              <dt>Status</dt>
+              <dd>
+                <StatusTag
+                  label={row.active ? "Ativo" : "Inativo"}
+                  status={row.active ? "success" : "neutral"}
+                  size="sm"
+                />
+              </dd>
+            </div>
+          )}
+        </dl>
+
+        {/* Lista de vinculados — só os campos específicos do vínculo */}
+        <section className="nm-prod__drawer-section">
+          <h3 className="nm-prod__drawer-section-title">
+            <Users size={16} aria-hidden="true" />
+            {linkedLabel}
+            <span className="nm-prod__count">{children.length}</span>
+          </h3>
+
+          {children.length === 0 ? (
+            <p className="nm-prod__muted" style={{ fontSize: 13 }}>
+              Nenhum vínculo.
+            </p>
+          ) : (
+            <ul className="nm-prod__linked">
+              {children.map((c) => (
+                <li key={c.key} className="nm-prod__linked-item">
+                  {c.kind === "product" && (
+                    <span
+                      className="nm-prod__dot"
+                      style={{ background: c.color ?? "#ccc" }}
+                      aria-hidden="true"
+                    />
+                  )}
+                  <div className="nm-prod__linked-main">
+                    <span className="nm-prod__linked-name">{c.title}</span>
+                    <span className="nm-prod__linked-sub">
+                      {childSubLabel}: {c.sub || "—"} · Código: {c.code || "—"}
+                    </span>
+                  </div>
+                  {c.kind === "product" && (
+                    <StatusTag
+                      label={c.active ? "Ativo" : "Inativo"}
+                      status={c.active ? "success" : "neutral"}
+                      size="sm"
+                    />
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </aside>
+    </>
   );
 };
 

@@ -121,7 +121,8 @@ export const ClientRegistrationPage = () => {
       id: "active",
       label: "Situação",
       align: "right",
-      accessor: (c) => (
+      accessor: (c) => (c.active ? "Ativo" : "Inativo"),
+      render: (_v, c) => (
         <StatusTag
           label={c.active ? "Ativo" : "Inativo"}
           status={c.active ? "success" : "neutral"}
