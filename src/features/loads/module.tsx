@@ -1,7 +1,7 @@
 import type { Module } from "@core/router/module.contract";
-import { RelatorioCargasPage } from "./pages/RelatorioCargasPage";
-import { CargasVolumePage } from "./pages/CargasVolumePage";
-import { MovimentacaoPage } from "./pages/MovimentacaoPage";
+import { RelatorioCargasPage } from "./pages/LoadsReportPage";
+import { CargasVolumePage } from "./pages/LoadsByVolumePage";
+import { MovimentacaoPage } from "./pages/VehicleMovementPage";
 
 const cargasModule: Module = {
   name: "cargas",

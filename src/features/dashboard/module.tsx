@@ -1,5 +1,5 @@
 import type { Module } from "@core/router/module.contract";
-import { InicioPage } from "./pages/InicioPage";
+import { InicioPage } from "./pages/HomePage";
 import { ArmazenagemService } from "./services/ArmazenagemService";
 
 /**

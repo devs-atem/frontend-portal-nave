@@ -1,6 +1,7 @@
 import type { Module } from "@core/router/module.contract";
 import { ProductsPage } from "./pages/ProductsPage";
-import { ProductsService } from "./services/ProductsService";
+import { MockProductsDataSource } from "./services/MockProductsDataSource";
+import type { ProductsDataSource } from "./services/ProductsDataSource";
 
 /**
  * Módulo Products — catálogo de produtos (dados mestres fixos) e seus vínculos
@@ -9,7 +10,7 @@ import { ProductsService } from "./services/ProductsService";
  */
 declare module "@core/ioc/registry" {
   interface AppServices {
-    products: ProductsService;
+    products: ProductsDataSource;
   }
 }
 
@@ -22,7 +23,9 @@ const productsModule: Module = {
     icon: "Package",
     order: 15,
   },
-  services: (c) => c.add({ products: new ProductsService() }),
+  // Default: mock em memória, sem back-end.
+  // Para usar a API real: c.add({ products: new ApiProductsDataSource(c.get("http")) })
+  services: (c) => c.add({ products: new MockProductsDataSource() }),
 };
 
 export default productsModule;

@@ -2,7 +2,6 @@ import { PageTitleCard, Table, type TableColumn } from "@devs-atem/design-system
 
 import { useIoC } from "@shared/hooks/useIoC";
 import { useClienteAtivo } from "@shared/hooks/useClienteAtivo";
-import { ClienteSelector } from "@shared/components/ClienteSelector";
 import { fD, fN, type Carga } from "@shared/domain";
 
 export const MovimentacaoPage = () => {
@@ -21,7 +20,7 @@ export const MovimentacaoPage = () => {
 
   return (
     <div style={{ padding: "24px 28px", display: "flex", flexDirection: "column", gap: 18 }}>
-      <PageTitleCard title="Movimentação de veículos" subtitle="Veículos envolvidos nas cargas" actions={<ClienteSelector />} />
+      <PageTitleCard title="Movimentação de veículos" subtitle="Veículos envolvidos nas cargas" />
       <Table<Carga> columns={columns} data={data} title="Movimentação" />
     </div>
   );

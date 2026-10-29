@@ -2,7 +2,6 @@ import { PageTitleCard, Table, type TableColumn } from "@devs-atem/design-system
 
 import { useIoC } from "@shared/hooks/useIoC";
 import { useClienteAtivo } from "@shared/hooks/useClienteAtivo";
-import { ClienteSelector } from "@shared/components/ClienteSelector";
 import { fDH, fDec, fN, fPct, type Tanque } from "@shared/domain";
 
 export const SaldosTanquePage = () => {
@@ -24,7 +23,7 @@ export const SaldosTanquePage = () => {
 
   return (
     <div style={{ padding: "24px 28px", display: "flex", flexDirection: "column", gap: 18 }}>
-      <PageTitleCard title="Saldos por tanque" subtitle="Saldo, bloqueios e disponibilidade por tanque" actions={<ClienteSelector />} />
+      <PageTitleCard title="Saldos por tanque" subtitle="Saldo, bloqueios e disponibilidade por tanque" />
       <Table<Tanque> columns={columns} data={data} title="Tanques" />
     </div>
   );

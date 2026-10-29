@@ -2,7 +2,6 @@ import { PageTitleCard, Table, type TableColumn } from "@devs-atem/design-system
 
 import { useIoC } from "@shared/hooks/useIoC";
 import { useClienteAtivo } from "@shared/hooks/useClienteAtivo";
-import { ClienteSelector } from "@shared/components/ClienteSelector";
 import { fD, fN, type Descarga } from "@shared/domain";
 
 export const SaldosLotePage = () => {
@@ -22,7 +21,7 @@ export const SaldosLotePage = () => {
 
   return (
     <div style={{ padding: "24px 28px", display: "flex", flexDirection: "column", gap: 18 }}>
-      <PageTitleCard title="Saldos por lote" subtitle="Saldo e rastreio por lote de descarga" actions={<ClienteSelector />} />
+      <PageTitleCard title="Saldos por lote" subtitle="Saldo e rastreio por lote de descarga" />
       <Table<Descarga> columns={columns} data={data} title="Lotes" />
     </div>
   );

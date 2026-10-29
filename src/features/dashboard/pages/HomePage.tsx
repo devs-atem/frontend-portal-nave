@@ -1,6 +1,15 @@
-import { type CSSProperties } from "react";
+import { type CSSProperties, type ComponentType } from "react";
 import { useNavigate } from "react-router-dom";
-import { Card, KpiCard, PageTitleCard, StatusTag, Typography } from "@devs-atem/design-system";
+import {
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  CalendarCheck,
+  Droplet,
+  Lock,
+  Truck,
+  type LucideProps,
+} from "lucide-react";
+import { Card, PageTitleCard, StatusTag, Typography } from "@devs-atem/design-system";
 
 import { useIoC } from "@shared/hooks/useIoC";
 import { useClienteAtivo } from "@shared/hooks/useClienteAtivo";
@@ -9,6 +18,17 @@ import { fDH, fH, fN, fPct, statusToTag } from "@shared/domain";
 import { BalanceByProductChart } from "../components/BalanceByProductChart";
 import { InboundOutboundChart } from "../components/InboundOutboundChart";
 import "../components/charts.css";
+import "./HomePage.css";
+
+type KpiStatus = "info" | "warning" | "default" | "success";
+
+interface KpiData {
+  label: string;
+  value: string;
+  sub: string;
+  icon: ComponentType<LucideProps>;
+  status: KpiStatus;
+}
 
 const sectionCard: CSSProperties = {
   background: "#FFFFFF",
@@ -26,6 +46,14 @@ export const InicioPage = () => {
   const navigate = useNavigate();
 
   const kpis = svc.kpisDashboard(cliente);
+  const kpiCards: KpiData[] = [
+    { label: "Saldo total disponível", value: `${fN(kpis.disponivel)} L`, sub: `${fN(kpis.disponivelKg)} kg`, icon: Droplet, status: "info" },
+    { label: "Saldo bloqueado", value: `${fN(kpis.bloqueado)} L`, sub: `${fN(kpis.bloqueadoKg)} kg`, icon: Lock, status: "warning" },
+    { label: "Veículos no terminal agora", value: String(kpis.veiculosNoTerminal), sub: `${kpis.veiculosEmOperacao} em operação`, icon: Truck, status: "default" },
+    { label: "Agendamentos de hoje", value: String(kpis.agendamentosHoje), sub: `${kpis.agendamentosHoje} concluídos`, icon: CalendarCheck, status: "default" },
+    { label: "Descargas no mês", value: String(kpis.descargasMes), sub: `${fN(kpis.litrosRecebidosMes)} L recebidos`, icon: ArrowDownToLine, status: "success" },
+    { label: "Cargas no mês", value: String(kpis.cargasMes), sub: `${fN(kpis.litrosExpedidosMes)} L expedidos`, icon: ArrowUpFromLine, status: "success" },
+  ];
   const tqs = svc.tanquesDe(cliente);
   const prodBars = svc.saldoPorProduto(cliente);
   const movimento = svc.movimentoDiarioDe(cliente);
@@ -41,13 +69,22 @@ export const InicioPage = () => {
       />
 
       {/* KPIs */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(230px,1fr))", gap: 14 }}>
-        <KpiCard label="Saldo total disponível" value={`${fN(kpis.disponivel)} L`} icon="Droplet" status="info" subValue={`${fN(kpis.disponivelKg)} kg`} />
-        <KpiCard label="Saldo bloqueado" value={`${fN(kpis.bloqueado)} L`} icon="Lock" status="warning" subValue={`${fN(kpis.bloqueadoKg)} kg`} />
-        <KpiCard label="Veículos no terminal agora" value={String(kpis.veiculosNoTerminal)} icon="Truck" status="default" subValue={`${kpis.veiculosEmOperacao} em operação`} />
-        <KpiCard label="Agendamentos de hoje" value={String(kpis.agendamentosHoje)} icon="CalendarCheck" status="default" subValue={`${kpis.agendamentosHoje} concluídos`} />
-        <KpiCard label="Descargas no mês" value={String(kpis.descargasMes)} icon="ArrowDownToLine" status="success" subValue={`${fN(kpis.litrosRecebidosMes)} L recebidos`} />
-        <KpiCard label="Cargas no mês" value={String(kpis.cargasMes)} icon="ArrowUpFromLine" status="success" subValue={`${fN(kpis.litrosExpedidosMes)} L expedidos`} />
+      <div className="nm-kpis">
+        {kpiCards.map((k) => {
+          const KpiIcon = k.icon;
+          return (
+            <div key={k.label} className="nm-kpi">
+              <div className="nm-kpi__top">
+                <span className={`nm-kpi__badge nm-kpi__badge--${k.status}`}>
+                  <KpiIcon size={18} aria-hidden="true" />
+                </span>
+                <span className="nm-kpi__label">{k.label}</span>
+              </div>
+              <span className="nm-kpi__value">{k.value}</span>
+              <span className="nm-kpi__sub">{k.sub}</span>
+            </div>
+          );
+        })}
       </div>
 
       {/* Gráficos: saldo por produto + entradas × saídas */}

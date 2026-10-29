@@ -2,7 +2,6 @@ import { PageTitleCard, Table, type TableColumn } from "@devs-atem/design-system
 
 import { useIoC } from "@shared/hooks/useIoC";
 import { useClienteAtivo } from "@shared/hooks/useClienteAtivo";
-import { ClienteSelector } from "@shared/components/ClienteSelector";
 import { fD, fN, type Carga } from "@shared/domain";
 
 export const RelatorioCargasPage = () => {
@@ -22,7 +21,7 @@ export const RelatorioCargasPage = () => {
 
   return (
     <div style={{ padding: "24px 28px", display: "flex", flexDirection: "column", gap: 18 }}>
-      <PageTitleCard title="Relatório de cargas" subtitle="Cargas expedidas no terminal" actions={<ClienteSelector />} />
+      <PageTitleCard title="Relatório de cargas" subtitle="Cargas expedidas no terminal" />
       <Table<Carga> columns={columns} data={data} title="Cargas" />
     </div>
   );

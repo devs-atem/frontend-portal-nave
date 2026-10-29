@@ -1,5 +1,5 @@
 import type { Module } from "@core/router/module.contract";
-import { DensidadesPage } from "./pages/DensidadesPage";
+import { DensidadesPage } from "./pages/DensitiesPage";
 
 const qualidadeModule: Module = {
   name: "qualidade",

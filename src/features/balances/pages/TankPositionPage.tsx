@@ -3,7 +3,6 @@ import { Button, PageTitleCard, StatusTag, Table, Typography, type TableColumn }
 
 import { useIoC } from "@shared/hooks/useIoC";
 import { useClienteAtivo } from "@shared/hooks/useClienteAtivo";
-import { ClienteSelector } from "@shared/components/ClienteSelector";
 import { OccupancyTank } from "@shared/components/OccupancyTank";
 import { fDH, fDec, fN, fPct, type Tanque } from "@shared/domain";
 
@@ -35,7 +34,6 @@ export const PosicaoPage = () => {
           <div style={{ display: "flex", gap: 8 }}>
             <Button variant={view === "cards" ? "contained" : "outlined"} onClick={() => setView("cards")}>Cards</Button>
             <Button variant={view === "tabela" ? "contained" : "outlined"} onClick={() => setView("tabela")}>Tabela</Button>
-            <ClienteSelector />
           </div>
         }
       />

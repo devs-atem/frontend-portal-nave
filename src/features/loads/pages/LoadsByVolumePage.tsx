@@ -2,7 +2,6 @@ import { PageTitleCard, Table, Typography, type TableColumn } from "@devs-atem/d
 
 import { useIoC } from "@shared/hooks/useIoC";
 import { useClienteAtivo } from "@shared/hooks/useClienteAtivo";
-import { ClienteSelector } from "@shared/components/ClienteSelector";
 import { BarMeter } from "@shared/components/BarMeter";
 import { fN } from "@shared/domain";
 
@@ -35,7 +34,7 @@ export const CargasVolumePage = () => {
 
   return (
     <div style={{ padding: "24px 28px", display: "flex", flexDirection: "column", gap: 18 }}>
-      <PageTitleCard title="Cargas por volume" subtitle="Volume expedido por produto" actions={<ClienteSelector />} />
+      <PageTitleCard title="Cargas por volume" subtitle="Volume expedido por produto" />
       <div style={{ background: "#FFFFFF", border: "1px solid #E2E6EE", borderRadius: 12, padding: 18, display: "flex", flexDirection: "column", gap: 10 }}>
         <Typography.H4>Litros por produto</Typography.H4>
         {data.map((d) => (

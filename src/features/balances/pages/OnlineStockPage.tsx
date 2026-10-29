@@ -2,7 +2,6 @@ import { PageTitleCard, Table, type TableColumn } from "@devs-atem/design-system
 
 import { useIoC } from "@shared/hooks/useIoC";
 import { useClienteAtivo } from "@shared/hooks/useClienteAtivo";
-import { ClienteSelector } from "@shared/components/ClienteSelector";
 import { fDec, fN } from "@shared/domain";
 
 interface LinhaEstoque {
@@ -49,7 +48,7 @@ export const EstoqueOnlinePage = () => {
 
   return (
     <div style={{ padding: "24px 28px", display: "flex", flexDirection: "column", gap: 18 }}>
-      <PageTitleCard title="Estoque online" subtitle="Snapshot consolidado por produto" actions={<ClienteSelector />} />
+      <PageTitleCard title="Estoque online" subtitle="Snapshot consolidado por produto" />
       <Table<LinhaEstoque> columns={columns} data={data} title="Estoque por produto" />
     </div>
   );

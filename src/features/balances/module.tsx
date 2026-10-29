@@ -1,8 +1,8 @@
 import type { Module } from "@core/router/module.contract";
-import { SaldosTanquePage } from "./pages/SaldosTanquePage";
-import { SaldosLotePage } from "./pages/SaldosLotePage";
-import { PosicaoPage } from "./pages/PosicaoPage";
-import { EstoqueOnlinePage } from "./pages/EstoqueOnlinePage";
+import { SaldosTanquePage } from "./pages/BalancesByTankPage";
+import { SaldosLotePage } from "./pages/BalancesByBatchPage";
+import { PosicaoPage } from "./pages/TankPositionPage";
+import { EstoqueOnlinePage } from "./pages/OnlineStockPage";
 
 const saldosModule: Module = {
   name: "saldos",

@@ -3,7 +3,6 @@ import { PageTitleCard, Select, Table, type TableColumn } from "@devs-atem/desig
 
 import { useIoC } from "@shared/hooks/useIoC";
 import { useClienteAtivo } from "@shared/hooks/useClienteAtivo";
-import { ClienteSelector } from "@shared/components/ClienteSelector";
 import { fDH, fDec, type Densidade } from "@shared/domain";
 
 export const DensidadesPage = () => {
@@ -41,7 +40,6 @@ export const DensidadesPage = () => {
               onChange={setTanqueId}
               size="sm"
             />
-            <ClienteSelector />
           </div>
         }
       />
