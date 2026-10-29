@@ -1,8 +1,0 @@
-[33mThe plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the [1mresolve.tsconfigPaths[22m option. You can remove the plugin and set [1mresolve.tsconfigPaths: true[22m in your Vite config instead.[39m
-[31merror when starting dev server:
-Error: Port 5173 is already in use
-    at httpServerStart (file:///C:/Users/pamel/Documents/2026/frontend-portal-nave/node_modules/vite/dist/node/chunks/node.js:14706:10)
-    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
-    at async startServer (file:///C:/Users/pamel/Documents/2026/frontend-portal-nave/node_modules/vite/dist/node/chunks/node.js:25156:30)
-    at async Object.listen (file:///C:/Users/pamel/Documents/2026/frontend-portal-nave/node_modules/vite/dist/node/chunks/node.js:24962:4)
-    at async CAC.<anonymous> (file:///C:/Users/pamel/Documents/2026/frontend-portal-nave/node_modules/vite/dist/node/cli.js:725:3)[39m
