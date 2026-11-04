@@ -1,4 +1,6 @@
 import type { Module } from "@core/router/module.contract";
+import { RouteGuard } from "@core/router/RouteGuard";
+import { generatePermissionMatcher } from "@shared/utils";
 import { ProductsPage } from "./pages/ProductsPage";
 import { MockProductsDataSource } from "./services/MockProductsDataSource";
 import type { ProductsDataSource } from "./services/ProductsDataSource";
@@ -14,14 +16,26 @@ declare module "@core/ioc/registry" {
   }
 }
 
+const PERM = "portal_nave:products:read";
+
 const productsModule: Module = {
   name: "products",
-  routes: [{ path: "/products", element: <ProductsPage /> }],
+  routes: [
+    {
+      path: "/products",
+      element: (
+        <RouteGuard rules={generatePermissionMatcher(PERM)}>
+          <ProductsPage />
+        </RouteGuard>
+      ),
+    },
+  ],
   menu: {
     label: "Produtos",
     path: "/products",
     icon: "Package",
     order: 15,
+    permission: PERM,
   },
   // Default: mock em memória, sem back-end.
   // Para usar a API real: c.add({ products: new ApiProductsDataSource(c.get("http")) })

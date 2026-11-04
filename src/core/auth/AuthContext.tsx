@@ -152,6 +152,28 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   }, []);
 
   useEffect(() => {
+    // ── DEV ONLY: bypass de autenticação ───────────────────────
+    // Com VITE_AUTH_BYPASS=true, injeta um usuário mock em adminMode
+    // e pula o refresh/login real. Serve só para ver os módulos em dev.
+    if (import.meta.env.VITE_AUTH_BYPASS === "true") {
+      console.warn(
+        "[AuthContext] ⚠️ AUTH BYPASS ativo (VITE_AUTH_BYPASS=true) — usuário mock admin. NÃO use em produção.",
+      );
+      setState({
+        token: "dev-bypass-token",
+        refreshToken: "dev-bypass-refresh",
+        subject: "dev-bypass",
+        email: "dev@local",
+        name: "Dev (bypass)",
+        roles: new Set(["admin"]),
+        permissionSet: { ROLES: ["admin"], SYSTEM_MODULES: [] },
+        adminMode: true,
+        logout,
+        authByPermission: () => true,
+      });
+      return;
+    }
+
     bootstrap();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

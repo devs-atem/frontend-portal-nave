@@ -24,6 +24,7 @@ declare module "@core/ioc/registry" {
 }
 
 const CLIENT_REGISTRY_PERMISSION = "portal_nave:client_registry:read";
+const ADMIN_PERMISSION = "portal_nave:admin:read";
 
 const administradorModule: Module = {
   name: "administrador",
@@ -38,7 +39,11 @@ const administradorModule: Module = {
     },
     {
       path: "/admin",
-      element: <AdminPage />,
+      element: (
+        <RouteGuard rules={generatePermissionMatcher(ADMIN_PERMISSION)}>
+          <AdminPage />
+        </RouteGuard>
+      ),
     },
   ],
   menu: {
@@ -58,6 +63,7 @@ const administradorModule: Module = {
         path: "/admin",
         icon: "Settings",
         order: 20,
+        permission: ADMIN_PERMISSION,
       },
     ],
   },
