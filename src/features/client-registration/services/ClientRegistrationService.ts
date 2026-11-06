@@ -48,12 +48,24 @@ export function toClientRecord(c: ClientResponse): ClientRecord {
   };
 }
 
+/** Contrato do service de cadastro de clientes (API real ou mock). */
+export interface IClientRegistrationService {
+  list(): Promise<ClientRecord[]>;
+  create(input: ClientRecordInput): Promise<ClientRecord>;
+  update(
+    id: string,
+    input: ClientRecordInput,
+    branches?: string[],
+  ): Promise<ClientRecord>;
+  remove(id: string): Promise<void>;
+}
+
 /**
  * Service de cadastro de clientes integrado ao mw-nave
  * (`/rest/clients`). Todas as operações são assíncronas; erros da camada
  * HTTP (`AppError`) propagam para a página.
  */
-export class ClientRegistrationService {
+export class ClientRegistrationService implements IClientRegistrationService {
   constructor(private readonly http: IHttpService) {}
 
   async list(): Promise<ClientRecord[]> {
