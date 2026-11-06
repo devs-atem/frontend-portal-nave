@@ -2,7 +2,8 @@ import type { Module } from "@core/router/module.contract";
 import { RouteGuard } from "@core/router/RouteGuard";
 import { generatePermissionMatcher } from "@shared/utils";
 import { ProductsPage } from "./pages/ProductsPage";
-import { ApiProductsDataSource } from "./services/ApiProductsDataSource";
+// import { ApiProductsDataSource } from "./services/ApiProductsDataSource";
+import { MockProductsDataSource } from "./services/MockProductsDataSource";
 import type { ProductsDataSource } from "./services/ProductsDataSource";
 
 /**
@@ -37,9 +38,11 @@ const productsModule: Module = {
     order: 15,
     permission: PERM,
   },
-  // API real (mw-nave). O mock (MockProductsDataSource) segue disponível
-  // para testes/protótipos.
-  services: (c) => c.add({ products: new ApiProductsDataSource(c.get("http")) }),
+  // TEMPORÁRIO: mock enquanto `GET /rest/products/all` retorna 500 no mw-nave-dev.
+  // Para voltar à API real: descomentar o import de `ApiProductsDataSource`,
+  // a linha abaixo, e remover o mock.
+  // services: (c) => c.add({ products: new ApiProductsDataSource(c.get("http")) }),
+  services: (c) => c.add({ products: new MockProductsDataSource() }),
 };
 
 export default productsModule;
