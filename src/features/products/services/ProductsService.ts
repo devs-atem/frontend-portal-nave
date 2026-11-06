@@ -1,5 +1,3 @@
-import { MockProductsDataSource } from "./MockProductsDataSource";
-
 /**
  * Produto do catálogo (dados mestres, fixos).
  * Shape reduzido ao essencial para o portal: identificação + grupo + cor.
@@ -24,16 +22,3 @@ export interface ProductClientLink {
   productId: string;
   clientId: number;
 }
-
-/**
- * Service do módulo Products (dados mestres fixos).
- *
- * A lógica e as seeds em memória vivem agora em `MockProductsDataSource`, que é
- * a fonte única do mock. `ProductsService` permanece como alias dessa
- * implementação para preservar os imports existentes (`new ProductsService()`
- * em `module.tsx`, `import type { CatalogProduct }` em `ProductsPage.tsx`).
- *
- * Expõe o catálogo e a relação N:N produto↔cliente, permitindo navegar nos dois
- * sentidos: clientes de um produto e produtos de um cliente.
- */
-export class ProductsService extends MockProductsDataSource {}
