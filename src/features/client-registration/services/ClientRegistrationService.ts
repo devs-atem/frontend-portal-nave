@@ -1,69 +1,117 @@
+import type { IHttpService } from "@core/http/models/IHttpService";
+import {
+  PRODUCTS_ENDPOINTS,
+  formatCnpj,
+  normalizeCnpj,
+  type ClientResponse,
+  type ClientsListResponse,
+  type CreateClientRequest,
+  type UpdateClientRequest,
+} from "@features/products/services/contract";
+
 /**
  * Cliente cadastrado no portal (dados mestres).
  * Campos essenciais do cadastro: CNPJ, nome e BPID.
  */
 export interface ClientRecord {
+  /** UUID do cliente no mw-nave. */
   id: string;
-  /** CNPJ formatado (00.000.000/0000-00). */
+  /** CNPJ da matriz formatado (00.000.000/0000-00; aceita alfanumérico). */
   cnpj: string;
+  /** CNPJs das filiais (sem máscara), preservados nas edições. */
+  branches: string[];
   /** Razão social / nome do cliente. */
   name: string;
-  /** Business Partner ID (identificador no SAP/ERP). */
+  /** Business Partner ID (identificador no SAP/ERP). Na API: `bp`. */
   bpid: string;
   active: boolean;
 }
 
 /** Dados de entrada de um novo cadastro ou edição. */
-export type ClientRecordInput = Omit<ClientRecord, "id" | "active"> & {
+export interface ClientRecordInput {
+  /** CNPJ (com ou sem máscara). */
+  cnpj: string;
+  name: string;
+  bpid: string;
   active?: boolean;
-};
+}
 
-const SEED: ClientRecord[] = [
-  { id: "1", cnpj: "12.345.678/0001-90", name: "Rio Negro Combustíveis Ltda", bpid: "BP-100245", active: true },
-  { id: "2", cnpj: "98.765.432/0001-10", name: "Distribuidora Amazonas S.A.", bpid: "BP-100312", active: true },
-  { id: "3", cnpj: "45.612.378/0001-55", name: "Solimões Energia Ltda", bpid: "BP-100478", active: true },
-];
+/** Mapeia a resposta da API para o modelo da tela. */
+export function toClientRecord(c: ClientResponse): ClientRecord {
+  return {
+    id: c.id,
+    cnpj: formatCnpj(c.cnpj?.headquarters ?? ""),
+    branches: c.cnpj?.branches ?? [],
+    name: c.name,
+    bpid: c.bp,
+    active: c.isActive,
+  };
+}
+
+/** Contrato do service de cadastro de clientes (API real ou mock). */
+export interface IClientRegistrationService {
+  list(): Promise<ClientRecord[]>;
+  create(input: ClientRecordInput): Promise<ClientRecord>;
+  update(
+    id: string,
+    input: ClientRecordInput,
+    branches?: string[],
+  ): Promise<ClientRecord>;
+  remove(id: string): Promise<void>;
+}
 
 /**
- * Service de cadastro de clientes (mock em memória).
- *
- * CRUD síncrono determinístico. Para integrar com backend, injetar
- * `IHttpService` no construtor e trocar os métodos por chamadas HTTP.
+ * Service de cadastro de clientes integrado ao mw-nave
+ * (`/rest/clients`). Todas as operações são assíncronas; erros da camada
+ * HTTP (`AppError`) propagam para a página.
  */
-export class ClientRegistrationService {
-  private clients: ClientRecord[] = [...SEED];
+export class ClientRegistrationService implements IClientRegistrationService {
+  constructor(private readonly http: IHttpService) {}
 
-  list(): ClientRecord[] {
-    return [...this.clients];
+  async list(): Promise<ClientRecord[]> {
+    const resp = await this.http.get<ClientsListResponse>(
+      PRODUCTS_ENDPOINTS.clients,
+    );
+    return (resp ?? []).map(toClientRecord);
   }
 
-  create(input: ClientRecordInput): ClientRecord {
-    const created: ClientRecord = {
-      id: crypto.randomUUID(),
-      cnpj: input.cnpj,
+  async create(input: ClientRecordInput): Promise<ClientRecord> {
+    const body: CreateClientRequest = {
       name: input.name,
-      bpid: input.bpid,
-      active: input.active ?? true,
+      bp: input.bpid,
+      cnpj: { headquarters: normalizeCnpj(input.cnpj), branches: [] },
+      isActive: input.active ?? true,
     };
-    this.clients = [created, ...this.clients];
-    return created;
+    const created = await this.http.post<ClientResponse>(
+      PRODUCTS_ENDPOINTS.clientsCreate,
+      body,
+    );
+    return toClientRecord(created);
   }
 
-  update(id: string, input: ClientRecordInput): ClientRecord | undefined {
-    const idx = this.clients.findIndex((c) => c.id === id);
-    if (idx === -1) return undefined;
-    const updated: ClientRecord = {
-      ...this.clients[idx],
-      cnpj: input.cnpj,
+  /**
+   * Atualiza um cliente. `branches` é reenviado para não perder as filiais
+   * já cadastradas ao trocar o CNPJ da matriz.
+   */
+  async update(
+    id: string,
+    input: ClientRecordInput,
+    branches: string[] = [],
+  ): Promise<ClientRecord> {
+    const body: UpdateClientRequest = {
       name: input.name,
-      bpid: input.bpid,
-      active: input.active ?? this.clients[idx].active,
+      bp: input.bpid,
+      cnpj: { headquarters: normalizeCnpj(input.cnpj), branches },
+      ...(input.active !== undefined ? { isActive: input.active } : {}),
     };
-    this.clients = this.clients.map((c) => (c.id === id ? updated : c));
-    return updated;
+    const updated = await this.http.patch<ClientResponse>(
+      PRODUCTS_ENDPOINTS.clientById(id),
+      body,
+    );
+    return toClientRecord(updated);
   }
 
-  remove(id: string): void {
-    this.clients = this.clients.filter((c) => c.id !== id);
+  async remove(id: string): Promise<void> {
+    await this.http.delete(PRODUCTS_ENDPOINTS.clientById(id));
   }
 }

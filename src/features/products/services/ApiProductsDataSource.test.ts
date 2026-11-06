@@ -7,6 +7,8 @@ import { ApiProductsDataSource } from "./ApiProductsDataSource";
 import {
   PRODUCTS_ENDPOINTS,
   type ClientResponse,
+  type NestedClientResponse,
+  type NestedProductResponse,
   type ProductResponse,
 } from "./contract";
 
@@ -19,91 +21,57 @@ const C_RIO = "7c3f9b22-1d4e-4a8b-9f10-2a6b5c8d4e01";
 const C_AMAZONAS = "b1a2c3d4-0000-4000-8000-000000000002";
 const C_SOLIMOES = "c2b3d4e5-0000-4000-8000-000000000003";
 
+const TS = "2026-01-01T00:00:00.000Z";
+
+const nestedClient = (
+  id: string,
+  name: string,
+  bp: string,
+  cnpj: string,
+): NestedClientResponse => ({
+  id,
+  name,
+  bp,
+  cnpj: { headquarters: cnpj, branches: [] },
+  isActive: true,
+  createdAt: TS,
+});
+
+const nestedProduct = (
+  id: string,
+  name: string,
+  sapCode: string,
+): NestedProductResponse => ({ id, name, sapCode, createdAt: TS, updatedAt: TS });
+
+const RIO = nestedClient(C_RIO, "Rio Negro Combustíveis LTDA", "100245", "12345678000190");
+const DIESEL = nestedProduct(P_DIESEL, "ÓLEO DIESEL A S10", "10460");
+const GASOLINA = nestedProduct(P_GASOLINA, "GASOLINA C COMUM", "10076");
+
+const SOLIMOES = nestedClient(C_SOLIMOES, "Solimões Energia Ltda", "100478", "11222333000144");
+
 /**
- * Monta respostas canônicas do contrato. A relação produto↔cliente é expressa
- * de forma assimétrica de propósito, para exercitar a derivação a partir de
- * AMBAS as direções:
- * - Diesel aninha Rio Negro (lado do produto).
- * - Solimões aninha Gasolina (lado do cliente) — esse vínculo não aparece no
- *   lado do produto.
- * - Diesel↔Rio Negro é expresso nos dois lados (deve ser de-duplicado).
+ * Monta respostas canônicas do contrato. Os vínculos vivem no detalhe do
+ * produto (`GET /products/:id`); `makeHttp` remove as relações das listagens.
+ * - Diesel → Rio Negro.
+ * - Gasolina → Solimões.
+ * - Amazonas não tem produtos.
  */
 function makeResponses(): {
   products: ProductResponse[];
   clients: ClientResponse[];
 } {
   const products: ProductResponse[] = [
-    {
-      id: P_DIESEL,
-      name: "ÓLEO DIESEL A S10",
-      abbreviation: "AS-10",
-      sapCode: "10460",
-      color: "#a18a9f",
-      group: "Diesel",
-      active: true,
-      clients: [
-        {
-          id: C_RIO,
-          codigo: "CLI-001",
-          razaoSocial: "Rio Negro Combustíveis LTDA",
-          cnpj: "12.345.678/0001-90",
-        },
-      ],
-    },
-    {
-      id: P_GASOLINA,
-      name: "GASOLINA C COMUM",
-      abbreviation: "Gasolina C",
-      sapCode: "10076",
-      color: "#29fca7",
-      group: "Gasolina",
-      active: false,
-      // sem clientes aninhados no lado do produto
-    },
+    { ...DIESEL, clients: [RIO] },
+    { ...GASOLINA, clients: [SOLIMOES] },
   ];
 
   const clients: ClientResponse[] = [
+    { ...RIO, updatedAt: TS },
     {
-      id: C_RIO,
-      codigo: "CLI-001",
-      razaoSocial: "Rio Negro Combustíveis LTDA",
-      cnpj: "12.345.678/0001-90",
-      products: [
-        {
-          id: P_DIESEL,
-          name: "ÓLEO DIESEL A S10",
-          abbreviation: "AS-10",
-          sapCode: "10460",
-          color: "#a18a9f",
-          group: "Diesel",
-          active: true,
-        },
-      ],
+      ...nestedClient(C_AMAZONAS, "Distribuidora Amazonas S.A.", "100312", "98765432000110"),
+      updatedAt: TS,
     },
-    {
-      id: C_AMAZONAS,
-      codigo: "CLI-002",
-      razaoSocial: "Distribuidora Amazonas S.A.",
-      cnpj: "98.765.432/0001-10",
-      // sem produtos
-    },
-    {
-      id: C_SOLIMOES,
-      codigo: "CLI-003",
-      razaoSocial: "Solimões Energia Ltda",
-      cnpj: "11.222.333/0001-44",
-      products: [
-        {
-          id: P_GASOLINA,
-          name: "GASOLINA C COMUM",
-          abbreviation: "Gasolina C",
-          sapCode: "10076",
-          color: "#29fca7",
-          group: "Gasolina",
-          active: false,
-        },
-      ],
-    },
+    { ...SOLIMOES, updatedAt: TS },
   ];
 
   return { products, clients };
@@ -111,14 +79,28 @@ function makeResponses(): {
 
 /**
  * Cria um `IHttpService` stub cujo `get` devolve as respostas canônicas de
- * acordo com o path. Retorna também o spy `get` para asserções de contagem.
+ * acordo com o path. Como na API real, as listagens `/all` NÃO trazem relações
+ * aninhadas; os clientes de um produto só vêm em `GET /products/:id`.
+ * Retorna também o spy `get` para asserções de contagem.
  */
 function makeHttp(
   responses = makeResponses(),
 ): { http: IHttpService; get: ReturnType<typeof vi.fn> } {
   const get = vi.fn(async (path: string) => {
-    if (path === PRODUCTS_ENDPOINTS.products) return responses.products;
-    if (path === PRODUCTS_ENDPOINTS.clients) return responses.clients;
+    if (path === PRODUCTS_ENDPOINTS.products) {
+      return responses.products.map(
+        ({ clients: _clients, ...product }) => product,
+      );
+    }
+    if (path === PRODUCTS_ENDPOINTS.clients) {
+      return responses.clients.map(
+        ({ products: _products, ...client }) => client,
+      );
+    }
+    const detail = responses.products.find(
+      (p) => path === PRODUCTS_ENDPOINTS.productById(p.id),
+    );
+    if (detail) return detail;
     throw new Error(`path inesperado: ${path}`);
   });
 
@@ -128,29 +110,38 @@ function makeHttp(
 
 describe("ApiProductsDataSource", () => {
   describe("mapeamento de campos", () => {
-    it("mapeia os campos do produto 1:1", async () => {
+    it("mapeia id/name/sapCode e aplica defaults aos campos ausentes na API", async () => {
       const { http } = makeHttp();
       const ds = new ApiProductsDataSource(http);
       await ds.load();
 
       const diesel = ds.products.find((p) => p.id === P_DIESEL);
-      expect(diesel).toEqual({
+      expect(diesel).toMatchObject({
         id: P_DIESEL,
         name: "ÓLEO DIESEL A S10",
-        abbreviation: "AS-10",
         sapCode: "10460",
-        color: "#a18a9f",
-        group: "Diesel",
+        abbreviation: "",
+        group: "",
         active: true,
       });
+      expect(diesel?.color).toMatch(/^#[0-9A-F]{6}$/i);
     });
 
-    it("mapeia razaoSocial→razao e preserva codigo/cnpj", async () => {
+    it("gera cor estável por produto", async () => {
+      const a = new ApiProductsDataSource(makeHttp().http);
+      const b = new ApiProductsDataSource(makeHttp().http);
+      await Promise.all([a.load(), b.load()]);
+      expect(a.products.map((p) => p.color)).toEqual(
+        b.products.map((p) => p.color),
+      );
+    });
+
+    it("mapeia name→razao, bp→codigo e formata o CNPJ da matriz", async () => {
       const { http } = makeHttp();
       const ds = new ApiProductsDataSource(http);
       await ds.load();
 
-      const rio = ds.clients.find((c) => c.codigo === "CLI-001");
+      const rio = ds.clients.find((c) => c.codigo === "100245");
       expect(rio?.razao).toBe("Rio Negro Combustíveis LTDA");
       expect(rio?.cnpj).toBe("12.345.678/0001-90");
       expect(typeof rio?.id).toBe("number");
@@ -164,30 +155,28 @@ describe("ApiProductsDataSource", () => {
       await ds.load();
 
       const clients = ds.clientsOfProduct(P_DIESEL);
-      expect(clients.map((c) => c.codigo)).toEqual(["CLI-001"]);
+      expect(clients.map((c) => c.codigo)).toEqual(["100245"]);
     });
 
-    it("deriva vínculos a partir do lado do cliente quando ausentes no produto", async () => {
+    it("deriva vínculos de cada produto a partir de GET /products/:id", async () => {
       const { http } = makeHttp();
       const ds = new ApiProductsDataSource(http);
       await ds.load();
 
-      // Gasolina↔Solimões só existe aninhado no lado do cliente.
       const clients = ds.clientsOfProduct(P_GASOLINA);
-      expect(clients.map((c) => c.codigo)).toEqual(["CLI-003"]);
+      expect(clients.map((c) => c.codigo)).toEqual(["100478"]);
 
       const products = ds.productsOfClient(ds.clients[2].id);
       expect(products.map((p) => p.id)).toEqual([P_GASOLINA]);
     });
 
-    it("de-duplica vínculos expressos em ambas as direções", async () => {
+    it("conta cada vínculo uma única vez", async () => {
       const { http } = makeHttp();
       const ds = new ApiProductsDataSource(http);
       await ds.load();
 
-      // Diesel↔Rio Negro aparece no produto e no cliente: deve contar 1 vez.
       expect(ds.clientCountOfProduct(P_DIESEL)).toBe(1);
-      const rio = ds.clients.find((c) => c.codigo === "CLI-001");
+      const rio = ds.clients.find((c) => c.codigo === "100245");
       expect(ds.productCountOfClient(rio!.id)).toBe(1);
     });
 
@@ -209,26 +198,22 @@ describe("ApiProductsDataSource", () => {
       const ds = new ApiProductsDataSource(http);
       await ds.load();
 
-      // Ordem do endpoint /rest/clients: Rio(1), Amazonas(2), Solimões(3).
+      // Ordem do endpoint de clientes: Rio(1), Amazonas(2), Solimões(3).
       expect(ds.clients.map((c) => c.id)).toEqual([1, 2, 3]);
       expect(ds.clients.map((c) => c.codigo)).toEqual([
-        "CLI-001",
-        "CLI-002",
-        "CLI-003",
+        "100245",
+        "100312",
+        "100478",
       ]);
     });
 
     it("mapeia clientes que aparecem apenas aninhados sob produtos", async () => {
-      // Produto referencia um cliente que NÃO está na lista /rest/clients.
+      // Produto referencia um cliente que NÃO está na lista de clientes.
       const responses = makeResponses();
       const C_NESTED_ONLY = "d3c4e5f6-0000-4000-8000-000000000009";
       responses.products[1].clients = [
-        {
-          id: C_NESTED_ONLY,
-          codigo: "CLI-009",
-          razaoSocial: "Cliente Só Aninhado",
-          cnpj: "00.000.000/0001-00",
-        },
+        SOLIMOES,
+        nestedClient(C_NESTED_ONLY, "Cliente Só Aninhado", "100999", "00000000000100"),
       ];
       const { http } = makeHttp(responses);
       const ds = new ApiProductsDataSource(http);
@@ -256,13 +241,15 @@ describe("ApiProductsDataSource", () => {
       expect(ds.clients).toBe(clientsRef);
     });
 
-    it("busca ambas as coleções em paralelo", async () => {
+    it("busca as listagens (/all) e o detalhe de cada produto", async () => {
       const { http, get } = makeHttp();
       const ds = new ApiProductsDataSource(http);
       await ds.load();
 
-      expect(get).toHaveBeenCalledWith(PRODUCTS_ENDPOINTS.products);
-      expect(get).toHaveBeenCalledWith(PRODUCTS_ENDPOINTS.clients);
+      expect(get).toHaveBeenCalledWith("/rest/products/all");
+      expect(get).toHaveBeenCalledWith("/rest/clients/all");
+      expect(get).toHaveBeenCalledWith(`/rest/products/${P_DIESEL}`);
+      expect(get).toHaveBeenCalledWith(`/rest/products/${P_GASOLINA}`);
     });
   });
 
