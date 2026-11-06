@@ -1,4 +1,4 @@
-﻿# RBAC — Grupo de Permissões: Portal da Nave
+# RBAC — Grupo de Permissões: Portal da Nave
 
 Cadastro das permissões do produto **`portal_nave`** (Navemazônia — Portal da Nave) no RBAC.
 
