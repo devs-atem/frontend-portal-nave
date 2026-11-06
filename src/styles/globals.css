@@ -66,6 +66,8 @@ button {
   --nm-orange: #f39200;
   --nm-nav-text: #ffffff;
   --nm-nav-text-dim: #c9d3e8;
+  /* Ícones da navegação no amarelo/laranja padrão da marca. */
+  --nm-nav-icon: var(--nm-orange);
 }
 
 /* O CSS do design system (sidebar.css) é importado dentro do JS do componente
@@ -168,4 +170,33 @@ html:root .atem-sidebar__logout {
 html:root .atem-sidebar__logout:hover {
   background: var(--nm-navy-hover);
   color: var(--nm-nav-text);
+}
+
+/* ─── Tabs (CustomTabs) no azul Navemazônia ──────────────────────────────────
+ * Por padrão o CustomTabs usa o `--atem-color-primary` do tema (vermelho) na
+ * tab ativa. No portal, a identidade é o azul marinho, então sobrescrevemos as
+ * variáveis internas do componente globalmente — vale para todas as abas. */
+.atem-custom-tabs {
+  --_custom-tabs-trigger-active-color: var(--nm-navy);
+  --_custom-tabs-trigger-active-border: var(--nm-navy);
+  --_custom-tabs-trigger-hover-color: var(--nm-navy);
+}
+
+/* ─── Ícones da navegação em amarelo ─────────────────────────────────────────
+ * Os ícones (lucide-react) usam `stroke: currentColor`, então herdavam a cor
+ * do texto do item (--nm-nav-text-dim, azul claro), que some sobre o azul
+ * escuro. Forçamos a cor só nos <svg> dos itens/section-headers — o texto do
+ * label permanece na cor original. Mantemos o amarelo também em hover/active.
+ */
+html:root .atem-sidebar__item svg,
+html:root .atem-sidebar__section-header svg,
+html:root .atem-sidebar__item--active svg,
+html:root .atem-sidebar__item:hover svg,
+html:root .atem-sidebar__item:focus svg,
+html:root .atem-sidebar__item:focus-visible svg,
+html:root .atem-sidebar__section-header:hover svg,
+html:root .atem-sidebar__section-header:focus svg,
+html:root .atem-sidebar__section-header:focus-visible svg {
+  color: var(--nm-nav-icon);
+  stroke: var(--nm-nav-icon);
 }

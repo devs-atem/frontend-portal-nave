@@ -18,11 +18,16 @@ export const isDevelopment =
 
 const env = resolveEnv();
 
-/** URL default da API de negócio por ambiente. Produto pode sobrescrever via VITE_API_URL. */
+/**
+ * URL default da API de negócio (mw-nave) por ambiente — apenas o host; os
+ * endpoints já incluem o prefixo `/rest`. Produto pode sobrescrever via
+ * VITE_API_URL.
+ */
 const defaultApiUrl: Record<ReturnType<typeof resolveEnv>, string> = {
-  development: "https://middleware-dev.grupoatem.com.br/rest",
-  homologation: "https://middleware-dev.grupoatem.com.br/rest",
-  production: "https://middleware.grupoatem.com.br/rest",
+  development: "https://mw-nave-dev.grupoatem.com.br",
+  homologation: "https://mw-nave-dev.grupoatem.com.br",
+  // TODO: confirmar a URL de produção do mw-nave.
+  production: "https://mw-nave.grupoatem.com.br",
 };
 
 const appConfig = {
@@ -30,7 +35,13 @@ const appConfig = {
     name: authConfig.productName,
   },
   api: {
-    url: import.meta.env.VITE_API_URL ?? defaultApiUrl[env],
+    // Proxy do Vite ativo (só em dev) → baseURL relativa, para o /rest passar
+    // pelo proxy. Senão: `||` (e não `??`), pois o deploy injeta
+    // VITE_API_URL="" quando não informado.
+    url:
+      import.meta.env.DEV && import.meta.env.VITE_API_PROXY_TARGET
+        ? ""
+        : import.meta.env.VITE_API_URL || defaultApiUrl[env],
     timeout: 60_000,
   },
   host: cookieHost,

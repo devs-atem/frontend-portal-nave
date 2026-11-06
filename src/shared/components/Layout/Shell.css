@@ -1,0 +1,24 @@
+/* ─── Shell — posiciona o bloco direito sobre a topbar do Sidebar ────────────
+ * O Sidebar do design system renderiza sua própria topbar (altura 56px) mas não
+ * expõe slot livre pra conteúdo. Posicionamos o AppBarRight de forma absoluta no
+ * canto superior direito, alinhado verticalmente à topbar.
+ */
+.nm-shell {
+  position: relative;
+}
+
+.nm-shell__appbar-right {
+  position: fixed;
+  top: 0;
+  right: 16px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  z-index: 40;
+}
+
+@media (max-width: 767px) {
+  .nm-shell__appbar-right {
+    right: 8px;
+  }
+}
