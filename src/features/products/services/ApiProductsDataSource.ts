@@ -3,6 +3,7 @@ import type { Cliente } from "@shared/domain";
 
 import {
   PRODUCTS_ENDPOINTS,
+  formatCnpj,
   type ClientResponse,
   type ClientsListResponse,
   type ProductResponse,
@@ -14,8 +15,9 @@ import type { CatalogProduct, ProductClientLink } from "./ProductsService";
 /**
  * Implementação da `ProductsDataSource` que consome a Products_API via HTTP.
  *
- * Hidrata um snapshot em memória a partir de `GET /rest/products` (produtos com
- * clientes aninhados) e `GET /rest/clients` (clientes com produtos aninhados),
+ * Hidrata um snapshot em memória a partir de `GET /rest/products/all` e
+ * `GET /rest/clients/all` (listagens sem relações aninhadas) e de
+ * `GET /rest/products/:id` para cada produto (detalhe com clientes vinculados),
  * mapeando o contrato (`ProductResponse`/`ClientResponse`) para os modelos do
  * front-end (`CatalogProduct`/`Cliente`). Os acessores síncronos leem desse
  * snapshot, preservando exatamente as assinaturas que a página já usa.
@@ -66,8 +68,17 @@ export class ApiProductsDataSource implements ProductsDataSource {
       this.http.get<ClientsListResponse>(PRODUCTS_ENDPOINTS.clients),
     ]);
 
-    const products = productsResp ?? [];
+    const listedProducts = productsResp ?? [];
     const clients = clientsResp ?? [];
+
+    // As listagens (`/all`) NÃO trazem as relações aninhadas: os clientes de
+    // cada produto só vêm em `GET /products/:id`. Busca o detalhe de cada
+    // produto para obter os vínculos.
+    const products = await Promise.all(
+      listedProducts.map((p) =>
+        this.http.get<ProductResponse>(PRODUCTS_ENDPOINTS.productById(p.id)),
+      ),
+    );
 
     // 1) Reconciliação de ids: semeia os substitutos a partir da ordem do
     //    endpoint de clientes...
@@ -167,22 +178,46 @@ export class ApiProductsDataSource implements ProductsDataSource {
   private toCliente(c: ClientResponse): Cliente {
     return {
       id: this.surrogateFor(c.id),
-      codigo: c.codigo,
-      razao: c.razaoSocial,
-      cnpj: c.cnpj,
+      codigo: c.bp,
+      razao: c.name,
+      cnpj: formatCnpj(c.cnpj?.headquarters ?? ""),
     };
   }
 }
 
-/** Mapeia a resposta de produto do contrato para o modelo do front-end. */
+/** Paleta usada para a "bolinha" do produto (a API não expõe cor). */
+const PRODUCT_PALETTE = [
+  "#0D265E",
+  "#F39200",
+  "#1E8E5A",
+  "#7A4FB5",
+  "#C2410C",
+  "#0E7490",
+  "#B42F2F",
+  "#5B6475",
+];
+
+/** Cor estável derivada do id do produto. */
+function colorFor(id: string): string {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) | 0;
+  return PRODUCT_PALETTE[Math.abs(hash) % PRODUCT_PALETTE.length];
+}
+
+/**
+ * Mapeia a resposta de produto do contrato para o modelo do front-end.
+ *
+ * A API hoje só expõe `id`, `name` e `sapCode`. Sigla, grupo e status ainda não
+ * existem no back-end: ficam vazios / ativo por padrão até o contrato evoluir.
+ */
 function toCatalogProduct(p: ProductResponse): CatalogProduct {
   return {
     id: p.id,
     name: p.name,
-    abbreviation: p.abbreviation,
+    abbreviation: "",
     sapCode: p.sapCode,
-    color: p.color,
-    group: p.group,
-    active: p.active,
+    color: colorFor(p.id),
+    group: "",
+    active: true,
   };
 }

@@ -1,4 +1,6 @@
 import type { Module } from "@core/router/module.contract";
+import { RouteGuard } from "@core/router/RouteGuard";
+import { generatePermissionMatcher } from "@shared/utils";
 import { InicioPage } from "./pages/HomePage";
 import { ArmazenagemService } from "./services/ArmazenagemService";
 
@@ -15,14 +17,26 @@ declare module "@core/ioc/registry" {
   }
 }
 
+const PERM = "portal_nave:dashboard:read";
+
 const inicioModule: Module = {
   name: "inicio",
-  routes: [{ path: "/inicio", element: <InicioPage /> }],
+  routes: [
+    {
+      path: "/inicio",
+      element: (
+        <RouteGuard rules={generatePermissionMatcher(PERM)}>
+          <InicioPage />
+        </RouteGuard>
+      ),
+    },
+  ],
   menu: {
     label: "Início",
     path: "/inicio",
     icon: "LayoutDashboard",
     order: 0,
+    permission: PERM,
   },
   services: (c) => c.add({ armazenagem: new ArmazenagemService() }),
 };

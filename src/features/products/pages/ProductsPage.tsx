@@ -70,9 +70,8 @@ export const ProductsPage = () => {
   const [selected, setSelected] = useState<Row | null>(null);
 
   // Fronteira de carregamento dos dados: dispara `svc.load()` uma vez na
-  // montagem e acompanha os estados de carregamento/erro. Sob o mock o load
-  // resolve imediatamente, então estes estados são inertes e a página renderiza
-  // como hoje.
+  // montagem e acompanha os estados de carregamento/erro (skeleton enquanto
+  // carrega; mensagem + "Tentar novamente" em caso de falha).
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   // Incrementado pelo botão "Tentar novamente" para reexecutar o efeito.
@@ -89,8 +88,8 @@ export const ProductsPage = () => {
       })
       .catch((err: unknown) => {
         if (cancelled) return;
-        const normalized =
-          err instanceof Error ? err : new Error("Falha ao carregar os dados.");
+        void err;
+        const normalized = new Error("Não foi possível exibir os dados.");
         setError(normalized);
         setLoading(false);
         toast.error(normalized.message);
@@ -104,9 +103,16 @@ export const ProductsPage = () => {
 
   /** Grupos únicos para o filtro (apenas na visão por produto). */
   const groups = useMemo(
-    () => ["all", ...new Set(svc.products.map((p) => p.group))],
-    [svc],
+    () => [
+      "all",
+      ...new Set(svc.products.map((p) => p.group).filter((g) => g !== "")),
+    ],
+    // `loading` entra nas deps para recalcular após o `load()` assíncrono.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [svc, loading],
   );
+  /** A API ainda não expõe grupo: esconde o filtro quando não há nenhum. */
+  const hasGroups = groups.length > 1;
 
   const matchesProduct = (p: CatalogProduct): boolean => {
     const term = search.trim().toLowerCase();
@@ -202,7 +208,7 @@ export const ProductsPage = () => {
         })),
       }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, search, group, status, svc]);
+  }, [view, search, group, status, svc, loading]);
 
   const clearFilters = () => {
     setSearch("");
@@ -336,7 +342,7 @@ export const ProductsPage = () => {
           style={{ flex: "1 1 0", minWidth: 0 }}
         />
 
-        {view === "product" && (
+        {view === "product" && hasGroups && (
           <Select<string>
             size="sm"
             value={group}
@@ -448,7 +454,7 @@ const DetailsDrawer = ({ row, view, onClose }: DetailsDrawerProps) => {
             <dt>Código</dt>
             <dd>{row.code || "—"}</dd>
           </div>
-          {isProduct && (
+          {isProduct && row.group && (
             <div>
               <dt>Grupo</dt>
               <dd>

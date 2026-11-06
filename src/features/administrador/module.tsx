@@ -3,7 +3,9 @@ import { RouteGuard } from "@core/router/RouteGuard";
 import { generatePermissionMatcher } from "@shared/utils";
 import { AdminPage } from "@features/admin/pages/AdminPage";
 import { ClientRegistrationPage } from "@features/client-registration/pages/ClientRegistrationPage";
-import { ClientRegistrationService } from "@features/client-registration/services/ClientRegistrationService";
+import type { IClientRegistrationService } from "@features/client-registration/services/ClientRegistrationService";
+import { MockClientRegistrationService } from "@features/client-registration/services/MockClientRegistrationService";
+// import { ClientRegistrationService } from "@features/client-registration/services/ClientRegistrationService";
 
 /**
  * Módulo pai "Administrador".
@@ -19,11 +21,12 @@ import { ClientRegistrationService } from "@features/client-registration/service
  */
 declare module "@core/ioc/registry" {
   interface AppServices {
-    clientRegistration: ClientRegistrationService;
+    clientRegistration: IClientRegistrationService;
   }
 }
 
 const CLIENT_REGISTRY_PERMISSION = "portal_nave:client_registry:read";
+const ADMIN_PERMISSION = "portal_nave:admin:read";
 
 const administradorModule: Module = {
   name: "administrador",
@@ -38,7 +41,11 @@ const administradorModule: Module = {
     },
     {
       path: "/admin",
-      element: <AdminPage />,
+      element: (
+        <RouteGuard rules={generatePermissionMatcher(ADMIN_PERMISSION)}>
+          <AdminPage />
+        </RouteGuard>
+      ),
     },
   ],
   menu: {
@@ -58,11 +65,16 @@ const administradorModule: Module = {
         path: "/admin",
         icon: "Settings",
         order: 20,
+        permission: ADMIN_PERMISSION,
       },
     ],
   },
-  services: (c) =>
-    c.add({ clientRegistration: new ClientRegistrationService() }),
+  // TEMPORÁRIO: mock enquanto a API /rest/clients está instável no mw-nave-dev.
+  // Para voltar à API real: descomentar o import de `ClientRegistrationService`
+  // e a linha abaixo, e remover o mock.
+  // services: (c) =>
+  //   c.add({ clientRegistration: new ClientRegistrationService(c.get("http")) }),
+  services: (c) => c.add({ clientRegistration: new MockClientRegistrationService() }),
 };
 
 export default administradorModule;
