@@ -2,7 +2,7 @@ import type { Module } from "@core/router/module.contract";
 import { RouteGuard } from "@core/router/RouteGuard";
 import { generatePermissionMatcher } from "@shared/utils";
 import { ProductsPage } from "./pages/ProductsPage";
-import { MockProductsDataSource } from "./services/MockProductsDataSource";
+import { ApiProductsDataSource } from "./services/ApiProductsDataSource";
 import type { ProductsDataSource } from "./services/ProductsDataSource";
 
 /**
@@ -37,9 +37,9 @@ const productsModule: Module = {
     order: 15,
     permission: PERM,
   },
-  // Default: mock em memória, sem back-end.
-  // Para usar a API real: c.add({ products: new ApiProductsDataSource(c.get("http")) })
-  services: (c) => c.add({ products: new MockProductsDataSource() }),
+  // API real (mw-nave). O mock (MockProductsDataSource) segue disponível
+  // para testes/protótipos.
+  services: (c) => c.add({ products: new ApiProductsDataSource(c.get("http")) }),
 };
 
 export default productsModule;

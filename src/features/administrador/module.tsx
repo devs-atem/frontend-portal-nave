@@ -68,7 +68,7 @@ const administradorModule: Module = {
     ],
   },
   services: (c) =>
-    c.add({ clientRegistration: new ClientRegistrationService() }),
+    c.add({ clientRegistration: new ClientRegistrationService(c.get("http")) }),
 };
 
 export default administradorModule;

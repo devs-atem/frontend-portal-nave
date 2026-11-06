@@ -173,7 +173,7 @@ export const ContractsPage = () => {
       )}
 
       {canEdit && (
-        <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
           <Button variant="contained" onClick={handleSave}>
             Salvar
           </Button>
