@@ -35,6 +35,8 @@ Cadastro das permissões do produto **`portal_nave`** (Navemazônia — Portal d
 | `portal_nave:movements:read` | Portal da Nave > Movimentos -> Consultar |
 | `portal_nave:quality_density:read` | Portal da Nave > Qualidade > Densidades do tanque -> Consultar |
 | `portal_nave:reports:read` | Portal da Nave > Relatórios -> Consultar |
+| `portal_nave:contracts:read` | Portal da Nave > Contratos -> Consultar |
+| `portal_nave:contracts:write` | Portal da Nave > Contratos -> Cadastrar/Editar |
 | `portal_nave:client_registry:read` | Portal da Nave > Administrador > Cadastro de clientes -> Consultar |
 | `portal_nave:admin:read` | Portal da Nave > Administrador > Administração -> Consultar |
 
@@ -72,6 +74,7 @@ Todos os itens abaixo já estão vinculados (menu + `RouteGuard`).
 | Movimentos | `/movimentos` | `portal_nave:movements:read` | `features/movements/module.tsx` |
 | Qualidade > Densidades do tanque | `/qualidade/densidades` | `portal_nave:quality_density:read` | `features/quality/module.tsx` |
 | Relatórios | `/relatorios` | `portal_nave:reports:read` | `features/reports/module.tsx` |
+| Contratos | `/contratos` | `portal_nave:contracts:read` (edição: `portal_nave:contracts:write`) | `features/contracts/module.tsx` |
 | Administrador > Cadastro de clientes | `/registrations/clients` | `portal_nave:client_registry:read` | `features/administrador/module.tsx` |
 | Administrador > Administração | `/admin` | `portal_nave:admin:read` | `features/administrador/module.tsx` |
 | _(sem menu)_ Meu perfil | `/perfil` | _(sem permissão — todo usuário autenticado)_ | `features/profile/module.tsx` |
@@ -118,6 +121,13 @@ Consulta + agendamentos + cadastro de clientes.
 portal_nave:client_registry:read
 ```
 > Quando a tela de edição de densidades existir, incluir `portal_nave:quality_density:write`.
+
+### Gestor de contratos
+Acesso ao módulo de Contratos (parâmetros contratuais). Ajuste com o PO se precisar de outras telas.
+```
+portal_nave:contracts:read
+portal_nave:contracts:write
+```
 
 ### Administrador
 Acesso total (concedido via role admin em `VITE_AUTH_ADMIN_ROLES`; não exige permissões individuais). Caso seja atribuído por permissões:
