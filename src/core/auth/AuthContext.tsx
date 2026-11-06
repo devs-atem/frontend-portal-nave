@@ -153,23 +153,47 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   useEffect(() => {
     // ── DEV ONLY: bypass de autenticação ───────────────────────
-    // Com VITE_AUTH_BYPASS=true, injeta um usuário mock em adminMode
-    // e pula o refresh/login real. Serve só para ver os módulos em dev.
+    // Com VITE_AUTH_BYPASS=true, injeta um usuário mock e pula o
+    // refresh/login real.
+    //
+    // Por padrão o mock é admin (adminMode) — bom pra ver todos os
+    // módulos. Para TESTAR o RBAC, defina VITE_AUTH_BYPASS_ADMIN=false
+    // e liste as permissões em VITE_AUTH_BYPASS_PERMISSIONS (separadas
+    // por vírgula). Aí o usuário mock fica sujeito aos filtros de menu
+    // e ao RouteGuard, como um usuário comum.
     if (import.meta.env.VITE_AUTH_BYPASS === "true") {
-      console.warn(
-        "[AuthContext] ⚠️ AUTH BYPASS ativo (VITE_AUTH_BYPASS=true) — usuário mock admin. NÃO use em produção.",
+      const bypassAdmin = import.meta.env.VITE_AUTH_BYPASS_ADMIN !== "false";
+      const bypassModules = expandPermissionAliases(
+        (import.meta.env.VITE_AUTH_BYPASS_PERMISSIONS ?? "")
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
       );
+
+      console.warn(
+        `[AuthContext] ⚠️ AUTH BYPASS ativo (VITE_AUTH_BYPASS=true) — usuário mock ${
+          bypassAdmin ? "ADMIN (ignora RBAC)" : "comum (sujeito ao RBAC)"
+        }. NÃO use em produção.`,
+      );
+
       setState({
         token: "dev-bypass-token",
         refreshToken: "dev-bypass-refresh",
         subject: "dev-bypass",
         email: "dev@local",
-        name: "Dev (bypass)",
-        roles: new Set(["admin"]),
-        permissionSet: { ROLES: ["admin"], SYSTEM_MODULES: [] },
-        adminMode: true,
+        name: bypassAdmin ? "Dev (bypass admin)" : "Dev (bypass)",
+        roles: new Set(bypassAdmin ? ["admin"] : []),
+        permissionSet: {
+          ROLES: bypassAdmin ? ["admin"] : [],
+          SYSTEM_MODULES: bypassModules,
+        },
+        adminMode: bypassAdmin,
         logout,
-        authByPermission: () => true,
+        authByPermission: (checkPermission: string) => {
+          if (bypassAdmin) return true;
+          const expanded = toReplaceAsterisk(checkPermission);
+          return bypassModules.some((m) => expanded.includes(m));
+        },
       });
       return;
     }
