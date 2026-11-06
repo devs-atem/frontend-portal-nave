@@ -5,7 +5,7 @@ import { modules } from "@core/router/modules";
 import type { MenuItem } from "@core/router/module.contract";
 
 /** Primeira rota navegável (folha com `path`) do menu já filtrado por RBAC. */
-export function findFirstPath(items: MenuItem[]): string | null {
+function findFirstPath(items: MenuItem[]): string | null {
   for (const item of items) {
     if (item.children?.length) {
       const found = findFirstPath(item.children);
