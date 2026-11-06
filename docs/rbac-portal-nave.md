@@ -1,4 +1,4 @@
-# RBAC — Grupo de Permissões: Portal da Nave
+﻿# RBAC — Grupo de Permissões: Portal da Nave
 
 Cadastro das permissões do produto **`portal_nave`** (Navemazônia — Portal da Nave) no RBAC.
 
@@ -81,12 +81,18 @@ Todos os itens abaixo já estão vinculados (menu + `RouteGuard`).
 
 ---
 
-## Perfis sugeridos (grupos de atribuição)
+## Modelo de acesso (definido com o time de RBAC)
 
-Agrupamentos típicos para facilitar a atribuição no RBAC. Ajuste conforme a política de acesso.
+- **`portal_nave` é só o produto (rules)**: não é grupo e não tem permissão própria.
+- **Dois grupos (roles)**, que carregam **apenas permissões de módulo** (não de centro):
+  - `nave_cliente`
+  - `nave_gestor_contratos`
+- **`admin`** já existe no RBAC (acesso total via `VITE_AUTH_ADMIN_ROLES`).
+- **Cada usuário é atrelado a UM grupo**: `nave_cliente` **ou** `nave_gestor_contratos`.
+- **Centros** são atribuídos **individualmente por usuário** (cadastro individual), e não pelo grupo. No front chegam em `permissionSet.CENTERS`.
 
-### Cliente — Consulta
-Acesso somente leitura ao que é do próprio cliente.
+### `nave_cliente`
+Consulta + criação de agendamentos.
 ```
 portal_nave:dashboard:read
 portal_nave:products:read
@@ -96,6 +102,7 @@ portal_nave:balances_position:read
 portal_nave:balances_online:read
 portal_nave:vehicles:read
 portal_nave:schedules:read
+portal_nave:schedules:write
 portal_nave:fiscal_nfe:read
 portal_nave:unloads_batch:read
 portal_nave:unloads_period:read
@@ -106,34 +113,15 @@ portal_nave:movements:read
 portal_nave:quality_density:read
 portal_nave:reports:read
 ```
+> `schedules:write` está incluída por suposição (antes havia "Consulta" e "Agendador"). Confirmar com o PO; se o cliente só consulta, remover.
 
-### Cliente — Agendador
-Consulta + criação de agendamentos.
-```
-(todas as permissões de "Cliente — Consulta")
-portal_nave:schedules:write
-```
-
-### Operador Navemazônia
-Consulta + agendamentos + cadastro de clientes.
-```
-(todas as permissões de "Cliente — Agendador")
-portal_nave:client_registry:read
-```
-> Quando a tela de edição de densidades existir, incluir `portal_nave:quality_density:write`.
-
-### Gestor de contratos
-Acesso ao módulo de Contratos (parâmetros contratuais). Ajuste com o PO se precisar de outras telas.
+### `nave_gestor_contratos`
+Módulo de Contratos.
 ```
 portal_nave:contracts:read
 portal_nave:contracts:write
 ```
+> Se o gestor precisar de outras telas (ex.: Início), acrescentar as permissões aqui.
 
-### Administrador
-Acesso total (concedido via role admin em `VITE_AUTH_ADMIN_ROLES`; não exige permissões individuais). Caso seja atribuído por permissões:
-```
-(todas as permissões de "Operador Navemazônia")
-portal_nave:admin:read
-portal_nave:admin:write
-portal_nave:quality_density:write
-```
+### `admin`
+Acesso total, sem permissões individuais.
