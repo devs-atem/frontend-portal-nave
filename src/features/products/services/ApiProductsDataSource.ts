@@ -15,8 +15,9 @@ import type { CatalogProduct, ProductClientLink } from "./ProductsService";
 /**
  * Implementação da `ProductsDataSource` que consome a Products_API via HTTP.
  *
- * Hidrata um snapshot em memória a partir de `GET /rest/products/all` (produtos
- * com clientes aninhados) e `GET /rest/clients/all` (clientes com produtos aninhados),
+ * Hidrata um snapshot em memória a partir de `GET /rest/products/all` e
+ * `GET /rest/clients/all` (listagens sem relações aninhadas) e de
+ * `GET /rest/products/:id` para cada produto (detalhe com clientes vinculados),
  * mapeando o contrato (`ProductResponse`/`ClientResponse`) para os modelos do
  * front-end (`CatalogProduct`/`Cliente`). Os acessores síncronos leem desse
  * snapshot, preservando exatamente as assinaturas que a página já usa.
@@ -67,8 +68,17 @@ export class ApiProductsDataSource implements ProductsDataSource {
       this.http.get<ClientsListResponse>(PRODUCTS_ENDPOINTS.clients),
     ]);
 
-    const products = productsResp ?? [];
+    const listedProducts = productsResp ?? [];
     const clients = clientsResp ?? [];
+
+    // As listagens (`/all`) NÃO trazem as relações aninhadas: os clientes de
+    // cada produto só vêm em `GET /products/:id`. Busca o detalhe de cada
+    // produto para obter os vínculos.
+    const products = await Promise.all(
+      listedProducts.map((p) =>
+        this.http.get<ProductResponse>(PRODUCTS_ENDPOINTS.productById(p.id)),
+      ),
+    );
 
     // 1) Reconciliação de ids: semeia os substitutos a partir da ordem do
     //    endpoint de clientes...

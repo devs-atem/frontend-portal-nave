@@ -47,14 +47,14 @@ const RIO = nestedClient(C_RIO, "Rio Negro Combustíveis LTDA", "100245", "12345
 const DIESEL = nestedProduct(P_DIESEL, "ÓLEO DIESEL A S10", "10460");
 const GASOLINA = nestedProduct(P_GASOLINA, "GASOLINA C COMUM", "10076");
 
+const SOLIMOES = nestedClient(C_SOLIMOES, "Solimões Energia Ltda", "100478", "11222333000144");
+
 /**
- * Monta respostas canônicas do contrato. A relação produto↔cliente é expressa
- * de forma assimétrica de propósito, para exercitar a derivação a partir de
- * AMBAS as direções:
- * - Diesel aninha Rio Negro (lado do produto).
- * - Solimões aninha Gasolina (lado do cliente) — esse vínculo não aparece no
- *   lado do produto.
- * - Diesel↔Rio Negro é expresso nos dois lados (deve ser de-duplicado).
+ * Monta respostas canônicas do contrato. Os vínculos vivem no detalhe do
+ * produto (`GET /products/:id`); `makeHttp` remove as relações das listagens.
+ * - Diesel → Rio Negro.
+ * - Gasolina → Solimões.
+ * - Amazonas não tem produtos.
  */
 function makeResponses(): {
   products: ProductResponse[];
@@ -62,21 +62,16 @@ function makeResponses(): {
 } {
   const products: ProductResponse[] = [
     { ...DIESEL, clients: [RIO] },
-    { ...GASOLINA }, // sem clientes aninhados no lado do produto
+    { ...GASOLINA, clients: [SOLIMOES] },
   ];
 
   const clients: ClientResponse[] = [
-    { ...RIO, updatedAt: TS, products: [DIESEL] },
+    { ...RIO, updatedAt: TS },
     {
       ...nestedClient(C_AMAZONAS, "Distribuidora Amazonas S.A.", "100312", "98765432000110"),
       updatedAt: TS,
-      // sem produtos
     },
-    {
-      ...nestedClient(C_SOLIMOES, "Solimões Energia Ltda", "100478", "11222333000144"),
-      updatedAt: TS,
-      products: [GASOLINA],
-    },
+    { ...SOLIMOES, updatedAt: TS },
   ];
 
   return { products, clients };
@@ -84,14 +79,28 @@ function makeResponses(): {
 
 /**
  * Cria um `IHttpService` stub cujo `get` devolve as respostas canônicas de
- * acordo com o path. Retorna também o spy `get` para asserções de contagem.
+ * acordo com o path. Como na API real, as listagens `/all` NÃO trazem relações
+ * aninhadas; os clientes de um produto só vêm em `GET /products/:id`.
+ * Retorna também o spy `get` para asserções de contagem.
  */
 function makeHttp(
   responses = makeResponses(),
 ): { http: IHttpService; get: ReturnType<typeof vi.fn> } {
   const get = vi.fn(async (path: string) => {
-    if (path === PRODUCTS_ENDPOINTS.products) return responses.products;
-    if (path === PRODUCTS_ENDPOINTS.clients) return responses.clients;
+    if (path === PRODUCTS_ENDPOINTS.products) {
+      return responses.products.map(
+        ({ clients: _clients, ...product }) => product,
+      );
+    }
+    if (path === PRODUCTS_ENDPOINTS.clients) {
+      return responses.clients.map(
+        ({ products: _products, ...client }) => client,
+      );
+    }
+    const detail = responses.products.find(
+      (p) => path === PRODUCTS_ENDPOINTS.productById(p.id),
+    );
+    if (detail) return detail;
     throw new Error(`path inesperado: ${path}`);
   });
 
@@ -149,12 +158,11 @@ describe("ApiProductsDataSource", () => {
       expect(clients.map((c) => c.codigo)).toEqual(["100245"]);
     });
 
-    it("deriva vínculos a partir do lado do cliente quando ausentes no produto", async () => {
+    it("deriva vínculos de cada produto a partir de GET /products/:id", async () => {
       const { http } = makeHttp();
       const ds = new ApiProductsDataSource(http);
       await ds.load();
 
-      // Gasolina↔Solimões só existe aninhado no lado do cliente.
       const clients = ds.clientsOfProduct(P_GASOLINA);
       expect(clients.map((c) => c.codigo)).toEqual(["100478"]);
 
@@ -162,12 +170,11 @@ describe("ApiProductsDataSource", () => {
       expect(products.map((p) => p.id)).toEqual([P_GASOLINA]);
     });
 
-    it("de-duplica vínculos expressos em ambas as direções", async () => {
+    it("conta cada vínculo uma única vez", async () => {
       const { http } = makeHttp();
       const ds = new ApiProductsDataSource(http);
       await ds.load();
 
-      // Diesel↔Rio Negro aparece no produto e no cliente: deve contar 1 vez.
       expect(ds.clientCountOfProduct(P_DIESEL)).toBe(1);
       const rio = ds.clients.find((c) => c.codigo === "100245");
       expect(ds.productCountOfClient(rio!.id)).toBe(1);
@@ -205,6 +212,7 @@ describe("ApiProductsDataSource", () => {
       const responses = makeResponses();
       const C_NESTED_ONLY = "d3c4e5f6-0000-4000-8000-000000000009";
       responses.products[1].clients = [
+        SOLIMOES,
         nestedClient(C_NESTED_ONLY, "Cliente Só Aninhado", "100999", "00000000000100"),
       ];
       const { http } = makeHttp(responses);
@@ -233,13 +241,15 @@ describe("ApiProductsDataSource", () => {
       expect(ds.clients).toBe(clientsRef);
     });
 
-    it("busca ambas as coleções (endpoints /all) em paralelo", async () => {
+    it("busca as listagens (/all) e o detalhe de cada produto", async () => {
       const { http, get } = makeHttp();
       const ds = new ApiProductsDataSource(http);
       await ds.load();
 
       expect(get).toHaveBeenCalledWith("/rest/products/all");
       expect(get).toHaveBeenCalledWith("/rest/clients/all");
+      expect(get).toHaveBeenCalledWith(`/rest/products/${P_DIESEL}`);
+      expect(get).toHaveBeenCalledWith(`/rest/products/${P_GASOLINA}`);
     });
   });
 

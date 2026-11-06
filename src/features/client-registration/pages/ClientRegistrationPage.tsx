@@ -13,6 +13,11 @@ import {
 } from "@devs-atem/design-system";
 
 import { useIoC } from "@shared/hooks/useIoC";
+import {
+  isValidCnpj,
+  maskCnpj,
+  normalizeCnpj,
+} from "@features/products/services/contract";
 import type {
   ClientRecord,
   ClientRecordInput,
@@ -27,16 +32,6 @@ const label: CSSProperties = {
   gap: 5,
 };
 
-/** Aplica máscara de CNPJ (00.000.000/0000-00) a partir dos dígitos. */
-const maskCnpj = (v: string): string =>
-  v
-    .replace(/\D/g, "")
-    .slice(0, 14)
-    .replace(/^(\d{2})(\d)/, "$1.$2")
-    .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
-    .replace(/\.(\d{3})(\d)/, ".$1/$2")
-    .replace(/(\d{4})(\d)/, "$1-$2");
-
 interface FormState {
   cnpj: string;
   name: string;
@@ -48,8 +43,17 @@ type FormErrors = Partial<Record<"cnpj" | "name" | "bpid", string>>;
 
 const EMPTY: FormState = { cnpj: "", name: "", bpid: "", active: true };
 
-const errorMessage = (err: unknown, fallback: string): string =>
-  err instanceof Error && err.message ? err.message : fallback;
+/**
+ * Mensagem amigável por status HTTP (409 = conflito de unicidade;
+ * 400 = erro de formulário). Demais erros usam a mensagem da API.
+ */
+const errorMessage = (err: unknown, fallback: string): string => {
+  const status = (err as { status?: number; statusCode?: number } | null);
+  const code = status?.status ?? status?.statusCode;
+  if (code === 409) return "Já existe um cliente com este CNPJ.";
+  if (code === 400) return "Dados inválidos. Revise os campos informados.";
+  return err instanceof Error && err.message ? err.message : fallback;
+};
 
 const PageHeader = ({ onCreate }: { onCreate?: () => void }) => (
   <PageTitleCard
@@ -148,9 +152,10 @@ export const ClientRegistrationPage = () => {
 
   const validate = (): boolean => {
     const e: FormErrors = {};
-    const digits = form.cnpj.replace(/\D/g, "");
+    const digits = normalizeCnpj(form.cnpj);
     if (!digits) e.cnpj = "Informe o CNPJ.";
-    else if (digits.length !== 14) e.cnpj = "CNPJ deve ter 14 dígitos.";
+    else if (digits.length !== 14) e.cnpj = "CNPJ deve ter 14 caracteres.";
+    else if (!isValidCnpj(digits)) e.cnpj = "CNPJ inválido.";
     if (!form.name.trim()) e.name = "Informe o nome do cliente.";
     if (!form.bpid.trim()) e.bpid = "Informe o BPID.";
     setErrors(e);

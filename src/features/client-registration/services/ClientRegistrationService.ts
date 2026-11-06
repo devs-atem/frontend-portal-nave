@@ -2,6 +2,7 @@ import type { IHttpService } from "@core/http/models/IHttpService";
 import {
   PRODUCTS_ENDPOINTS,
   formatCnpj,
+  normalizeCnpj,
   type ClientResponse,
   type ClientsListResponse,
   type CreateClientRequest,
@@ -15,9 +16,9 @@ import {
 export interface ClientRecord {
   /** UUID do cliente no mw-nave. */
   id: string;
-  /** CNPJ da matriz formatado (00.000.000/0000-00). */
+  /** CNPJ da matriz formatado (00.000.000/0000-00; aceita alfanumérico). */
   cnpj: string;
-  /** CNPJs das filiais (somente dígitos), preservados nas edições. */
+  /** CNPJs das filiais (sem máscara), preservados nas edições. */
   branches: string[];
   /** Razão social / nome do cliente. */
   name: string;
@@ -34,8 +35,6 @@ export interface ClientRecordInput {
   bpid: string;
   active?: boolean;
 }
-
-const onlyDigits = (v: string) => v.replace(/\D/g, "");
 
 /** Mapeia a resposta da API para o modelo da tela. */
 export function toClientRecord(c: ClientResponse): ClientRecord {
@@ -68,7 +67,7 @@ export class ClientRegistrationService {
     const body: CreateClientRequest = {
       name: input.name,
       bp: input.bpid,
-      cnpj: { headquarters: onlyDigits(input.cnpj), branches: [] },
+      cnpj: { headquarters: normalizeCnpj(input.cnpj), branches: [] },
       isActive: input.active ?? true,
     };
     const created = await this.http.post<ClientResponse>(
@@ -90,7 +89,7 @@ export class ClientRegistrationService {
     const body: UpdateClientRequest = {
       name: input.name,
       bp: input.bpid,
-      cnpj: { headquarters: onlyDigits(input.cnpj), branches },
+      cnpj: { headquarters: normalizeCnpj(input.cnpj), branches },
       ...(input.active !== undefined ? { isActive: input.active } : {}),
     };
     const updated = await this.http.patch<ClientResponse>(
