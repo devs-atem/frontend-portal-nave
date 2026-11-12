@@ -219,9 +219,9 @@ export const buildRevisionInput = (r: RevisionForm): RevisionInput => ({
 export const buildContractRequest = (f: ContractForm): CreateContractRequest => ({
   internalCode: f.internalCode.trim(),
   contractNumber: f.contractNumber.trim(),
-  ownerId: f.ownerId,
-  source: f.source,
-  baseCode: f.baseCode,
+  // Depositante/Base opcionais por enquanto: omitidos quando vazios.
+  ...(f.ownerId ? { ownerId: f.ownerId } : {}),
+  ...(f.source && f.baseCode ? { source: f.source, baseCode: f.baseCode } : {}),
   effectiveFrom: dateToIso(f.effectiveFrom),
   effectiveTo: f.effectiveTo ? dateToIso(f.effectiveTo, true) : undefined,
   revision: buildRevisionInput(f.revision),
@@ -299,8 +299,7 @@ export function validateContractForm(
   if (o.mode === "contract") {
     if (!f.internalCode.trim()) e.internalCode = "Informe o código interno.";
     if (!f.contractNumber.trim()) e.contractNumber = "Informe o número do contrato.";
-    if (!f.ownerId) e.ownerId = "Selecione o depositante.";
-    if (!f.source || !f.baseCode) e.base = "Selecione a base.";
+    // Depositante e Base: NÃO obrigatórios por enquanto (/owners/all ainda vem vazio).
     if (!f.effectiveFrom) e.effectiveFrom = "Informe o início da vigência.";
     if (f.effectiveFrom && f.effectiveTo && time(f.effectiveTo) <= time(f.effectiveFrom)) {
       e.effectiveTo = "O fim deve ser posterior ao início.";

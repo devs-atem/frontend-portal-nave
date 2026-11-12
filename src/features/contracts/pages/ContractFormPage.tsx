@@ -1,14 +1,14 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { Button, Input, PageTitleCard, Select, Skeleton } from "@devs-atem/design-system";
 
 import { useIoC } from "@shared/hooks/useIoC";
+import { DateField } from "@shared/components/DateField";
 import { RevisionEditor, type ProductChoice } from "../components/RevisionEditor";
 import type {
   BaseResponse,
   ContractResponse,
-  OwnerProductResponse,
   OwnerOption,
 } from "../services/contract";
 import { contractErrorMessage, errorStatus, isStaleStateError } from "../services/contractErrors";
@@ -75,7 +75,7 @@ export const ContractFormPage = ({ mode }: { mode: ContractFormMode }) => {
   const [bases, setBases] = useState<BaseResponse[]>([]);
   /** Falha ao carregar `GET /rest/operational-catalog/bases/all` (null = carregou). */
   const [basesError, setBasesError] = useState<string | null>(null);
-  const [ownerProducts, setOwnerProducts] = useState<OwnerProductResponse[]>([]);
+  const [productChoices, setProductChoices] = useState<ProductChoice[]>([]);
   const [ownerProductsLoading, setOwnerProductsLoading] = useState(false);
 
   const [loading, setLoading] = useState(true);
@@ -173,23 +173,33 @@ export const ContractFormPage = ({ mode }: { mode: ContractFormMode }) => {
     };
   }, [mode, id, contracts]);
 
-  // ─── Produtos do depositante (pré-requisito dos itens) ─────────────────────
+  // ─── Produtos disponíveis para os itens ────────────────────────────────────
+  // Com depositante: produtos habilitados para ele (OwnerProduct). Sem
+  // depositante (campo opcional por enquanto): catálogo completo de produtos.
   useEffect(() => {
-    if (!form.ownerId) {
-      setOwnerProducts([]);
-      return;
-    }
     let cancelled = false;
     setOwnerProductsLoading(true);
-    owners
-      .listProducts(form.ownerId)
+    const request: Promise<ProductChoice[]> = form.ownerId
+      ? owners.listProducts(form.ownerId).then((rows) =>
+          rows.map((op) => ({
+            productId: op.product.id,
+            name: op.product.name,
+            sapCode: op.product.sapCode,
+            customerProductCode: op.customerProductCode,
+            customerProductDescription: op.customerProductDescription,
+          })),
+        )
+      : reference
+          .listProducts()
+          .then((rows) => rows.map((p) => ({ productId: p.id, name: p.name, sapCode: p.sapCode })));
+    request
       .then((rows) => {
-        if (!cancelled) setOwnerProducts(rows);
+        if (!cancelled) setProductChoices(rows);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
-        setOwnerProducts([]);
-        toast.error(contractErrorMessage(err, "Não foi possível carregar os produtos do depositante."));
+        setProductChoices([]);
+        toast.error(contractErrorMessage(err, "Não foi possível carregar os produtos."));
       })
       .finally(() => {
         if (!cancelled) setOwnerProductsLoading(false);
@@ -197,19 +207,7 @@ export const ContractFormPage = ({ mode }: { mode: ContractFormMode }) => {
     return () => {
       cancelled = true;
     };
-  }, [form.ownerId, owners]);
-
-  const productChoices = useMemo<ProductChoice[]>(
-    () =>
-      ownerProducts.map((op) => ({
-        productId: op.product.id,
-        name: op.product.name,
-        sapCode: op.product.sapCode,
-        customerProductCode: op.customerProductCode,
-        customerProductDescription: op.customerProductDescription,
-      })),
-    [ownerProducts],
-  );
+  }, [form.ownerId, owners, reference]);
 
   // ─── Edição de campos ──────────────────────────────────────────────────────
   const setField = <K extends keyof ContractForm>(k: K, v: ContractForm[K]) => {
@@ -388,7 +386,7 @@ export const ContractFormPage = ({ mode }: { mode: ContractFormMode }) => {
               {errors.contractNumber && <span style={errorText}>{errors.contractNumber}</span>}
             </label>
             <div style={label}>
-              Depositante (Owner) *
+              Depositante (Owner)
               <Select<string>
                 size="sm"
                 value={form.ownerId}
@@ -410,7 +408,7 @@ export const ContractFormPage = ({ mode }: { mode: ContractFormMode }) => {
               )}
             </div>
             <div style={label}>
-              Base *
+              Base
               <Select<string>
                 size="sm"
                 value={baseKey}
@@ -429,40 +427,37 @@ export const ContractFormPage = ({ mode }: { mode: ContractFormMode }) => {
                 bases.length === 0 && <span style={hint}>Nenhuma base disponível.</span>
               )}
             </div>
-            <label style={label}>
+            <div style={label}>
               Início da vigência *
-              <Input
-                size="sm"
-                type="date"
+              <DateField
+                ariaLabel="Início da vigência"
                 value={form.effectiveFrom}
-                onChange={(e) => setField("effectiveFrom", e.target.value)}
+                onChange={(v) => setField("effectiveFrom", v)}
                 error={!!errors.effectiveFrom}
                 disabled={saving}
               />
               {errors.effectiveFrom && <span style={errorText}>{errors.effectiveFrom}</span>}
-            </label>
-            <label style={label}>
+            </div>
+            <div style={label}>
               Fim da vigência (vazio = indeterminado)
-              <Input
-                size="sm"
-                type="date"
+              <DateField
+                ariaLabel="Fim da vigência"
                 value={form.effectiveTo}
-                onChange={(e) => setField("effectiveTo", e.target.value)}
+                onChange={(v) => setField("effectiveTo", v)}
                 error={!!errors.effectiveTo}
                 disabled={saving}
+                min={form.effectiveFrom || undefined}
+                align="end"
               />
               {errors.effectiveTo && <span style={errorText}>{errors.effectiveTo}</span>}
-            </label>
+            </div>
           </div>
         </div>
       )}
 
       <div style={section}>
         <strong style={{ color: "#0D265E" }}>{isRevision ? "Revisão" : "Revisão inicial"}</strong>
-        {ownerProductsLoading && <span style={hint}>Carregando produtos do depositante…</span>}
-        {!form.ownerId && !isRevision && (
-          <span style={hint}>Selecione o depositante e a base para liberar os itens.</span>
-        )}
+        {ownerProductsLoading && <span style={hint}>Carregando produtos…</span>}
         <RevisionEditor
           value={form.revision}
           onChange={(revision) => {
@@ -475,7 +470,7 @@ export const ContractFormPage = ({ mode }: { mode: ContractFormMode }) => {
           productChoices={productChoices}
           reference={reference}
           requireJustification={isRevision}
-          disabled={saving || (!isRevision && (!form.ownerId || !form.source))}
+          disabled={saving}
         />
       </div>
 

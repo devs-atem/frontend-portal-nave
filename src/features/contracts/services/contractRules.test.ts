@@ -87,9 +87,20 @@ describe("validateContractForm", () => {
       OPTS,
     );
     expect(e.internalCode).toBeTruthy();
-    expect(e.ownerId).toBeTruthy();
-    expect(e.base).toBeTruthy();
+    // Depositante e Base não são obrigatórios por enquanto.
+    expect(e.ownerId).toBeUndefined();
+    expect(e.base).toBeUndefined();
     expect(e["rev.items"]).toBeTruthy();
+  });
+
+  it("buildContractRequest omite depositante e base quando vazios", () => {
+    const empty = buildContractRequest(validForm({ ownerId: "", source: "", baseCode: "" }));
+    expect(empty).not.toHaveProperty("ownerId");
+    expect(empty).not.toHaveProperty("source");
+    expect(empty).not.toHaveProperty("baseCode");
+
+    const filled = buildContractRequest(validForm({ ownerId: "o-1", source: "SAP", baseCode: "C001" }));
+    expect(filled).toMatchObject({ ownerId: "o-1", source: "SAP", baseCode: "C001" });
   });
 
   it("vigência: fim posterior ao início e revisão dentro do contrato", () => {

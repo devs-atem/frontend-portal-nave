@@ -15,6 +15,7 @@ import {
   type ValidationErrors,
 } from "../services/contractRules";
 import type { IReferenceService } from "../services/ReferenceService";
+import { DateField } from "@shared/components/DateField";
 
 /** Produto elegível para um item (já vinculado ao depositante). */
 export interface ProductChoice {
@@ -271,22 +272,34 @@ export const RevisionEditor = ({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={grid}>
-        <TextField
-          title="Início da revisão *"
-          type="date"
-          value={value.effectiveFrom}
-          onChange={(v) => setRev({ effectiveFrom: v })}
-          error={errors["rev.effectiveFrom"]}
-          disabled={disabled}
-        />
-        <TextField
-          title="Fim da revisão (vazio = indeterminado)"
-          type="date"
-          value={value.effectiveUntil}
-          onChange={(v) => setRev({ effectiveUntil: v })}
-          error={errors["rev.effectiveUntil"]}
-          disabled={disabled}
-        />
+        <div style={label}>
+          Início da revisão *
+          <DateField
+            ariaLabel="Início da revisão"
+            value={value.effectiveFrom}
+            onChange={(v) => setRev({ effectiveFrom: v })}
+            error={!!errors["rev.effectiveFrom"]}
+            disabled={disabled}
+          />
+          {errors["rev.effectiveFrom"] && (
+            <span style={errorText}>{errors["rev.effectiveFrom"]}</span>
+          )}
+        </div>
+        <div style={label}>
+          Fim da revisão (vazio = indeterminado)
+          <DateField
+            ariaLabel="Fim da revisão"
+            value={value.effectiveUntil}
+            onChange={(v) => setRev({ effectiveUntil: v })}
+            error={!!errors["rev.effectiveUntil"]}
+            disabled={disabled}
+            min={value.effectiveFrom || undefined}
+            align="end"
+          />
+          {errors["rev.effectiveUntil"] && (
+            <span style={errorText}>{errors["rev.effectiveUntil"]}</span>
+          )}
+        </div>
       </div>
 
       <label style={label}>

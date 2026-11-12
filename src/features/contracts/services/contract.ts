@@ -129,9 +129,10 @@ export interface RevisionResponse {
 export interface CreateContractRequest {
   internalCode: string;
   contractNumber: string;
-  ownerId: string;
-  source: string;
-  baseCode: string;
+  /** Opcional por enquanto: omitido quando vazio. */
+  ownerId?: string;
+  source?: string;
+  baseCode?: string;
   effectiveFrom: string;
   effectiveTo?: string | null;
   revision: RevisionInput;
