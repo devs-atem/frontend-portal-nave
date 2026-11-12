@@ -1,5 +1,4 @@
 import type { IHttpService } from "@core/http/models/IHttpService";
-import appConfig from "@core/config/appConfig";
 import type { Cliente } from "@shared/domain";
 
 import {
@@ -72,12 +71,6 @@ export class ApiProductsDataSource implements ProductsDataSource {
     );
     const { rows, total } = toPaged(resp);
 
-    console.log(
-      `[Products] ${appConfig.api.url || "(proxy)"} GET ${PRODUCTS_ENDPOINTS.productsRoot}?page=${q.page}&limit=${q.limit} →`,
-      `${rows.length} produtos nesta página, total ${total}`,
-      rows,
-    );
-
     return { rows: rows.map(toCatalogProduct), total };
   }
 
@@ -89,12 +82,6 @@ export class ApiProductsDataSource implements ProductsDataSource {
     );
     const { rows, total } = toPaged(resp);
 
-    console.log(
-      `[Products] ${appConfig.api.url || "(proxy)"} GET ${PRODUCTS_ENDPOINTS.clientsPaginated}?page=${q.page}&limit=${q.limit} →`,
-      `${rows.length} clientes nesta página, total ${total}`,
-      rows,
-    );
-
     return { rows: rows.map((c) => this.toCliente(c)), total };
   }
 
@@ -102,11 +89,6 @@ export class ApiProductsDataSource implements ProductsDataSource {
   async getProductDetail(productId: string): Promise<ProductWithClients> {
     const d = await this.http.get<ProductResponse>(
       PRODUCTS_ENDPOINTS.productById(productId),
-    );
-    console.log(
-      `[Products] GET ${PRODUCTS_ENDPOINTS.productById(productId)} →`,
-      `${d.clients?.length ?? 0} clientes`,
-      d,
     );
     return {
       product: toCatalogProduct(d),
@@ -121,11 +103,6 @@ export class ApiProductsDataSource implements ProductsDataSource {
     const d = await this.http.get<ClientResponse>(
       PRODUCTS_ENDPOINTS.clientById(uuid),
     );
-    console.log(
-      `[Products] GET ${PRODUCTS_ENDPOINTS.clientById(uuid)} →`,
-      `${d.products?.length ?? 0} produtos`,
-      d,
-    );
     return {
       client: this.toCliente(d),
       products: uniqueProducts(d.products ?? []).map(toCatalogProduct),
@@ -136,11 +113,6 @@ export class ApiProductsDataSource implements ProductsDataSource {
       PRODUCTS_ENDPOINTS.clients,
     );
     const clients = resp ?? [];
-    console.log(
-      `[Products] GET ${PRODUCTS_ENDPOINTS.clients} (seletor de vínculo) →`,
-      clients.length,
-      "clientes",
-    );
     return clients.map((c) => this.toCliente(c));
   }
 
@@ -149,11 +121,6 @@ export class ApiProductsDataSource implements ProductsDataSource {
       PRODUCTS_ENDPOINTS.products,
     );
     const products = resp ?? [];
-    console.log(
-      `[Products] GET ${PRODUCTS_ENDPOINTS.products} (seletor de vínculo) →`,
-      products.length,
-      "produtos",
-    );
     return products.map(toCatalogProduct);
   }
 
