@@ -50,15 +50,47 @@ export interface ProductResponse extends NestedProductResponse {
   clients?: NestedClientResponse[];
 }
 
+/** Campos de contrato aceitos em `contractFields` (inválidos são ignorados pela API). */
+export type ClientContractField =
+  | "id"
+  | "internalCode"
+  | "contractNumber"
+  | "ownerId"
+  | "source"
+  | "baseCode"
+  | "status"
+  | "effectiveFrom"
+  | "effectiveTo"
+  | "createdBy"
+  | "currentRevisionId"
+  | "createdAt"
+  | "updatedAt";
+
+/** Contrato resumido devolvido em `contracts` (campos nulos são omitidos). */
+export type ClientContractSummary = Partial<Record<ClientContractField, string>>;
+
+/** Campos padrão pedidos em `contractFields`. */
+export const DEFAULT_CLIENT_CONTRACT_FIELDS: ClientContractField[] = [
+  "id",
+  "contractNumber",
+  "status",
+  "effectiveFrom",
+  "effectiveTo",
+];
+
 /**
  * `ClientResponseDto`.
  *
  * `products` só vem em `GET /clients/:id` e `PATCH` — NÃO vem em `POST`,
  * `GET /clients` nem `GET /clients/all`.
+ *
+ * `contracts` só vem quando `contractFields` é enviado em `GET /clients` ou
+ * `GET /clients/:id` (vínculo lógico por CNPJ do Owner, sem FK).
  */
 export interface ClientResponse extends NestedClientResponse {
   updatedAt: string;
   products?: NestedProductResponse[];
+  contracts?: ClientContractSummary[];
 }
 
 /** Resposta paginada (`*PaginationResponseDto`). */
@@ -66,17 +98,6 @@ export interface PaginatedResponse<T> {
   rows: T[];
   /** Total de registros (não da página). */
   total: number;
-}
-
-/** Query de paginação (`page` base 1; `limit` entre 1 e 100). */
-export interface PaginationParams {
-  page?: number;
-  limit?: number;
-}
-
-/** Resposta de `DELETE` em produtos e clientes. */
-export interface DeleteResponse {
-  success: boolean;
 }
 
 /** `POST /rest/products` (`CreateProductDto`). */
@@ -99,6 +120,12 @@ export interface UpdateProductRequest {
 
 /** `GET /rest/products/all`. */
 export type ProductsListResponse = ProductResponse[];
+
+/** `GET /rest/products?page&limit` (`ProductsPaginationResponseDto`). */
+export type ProductsPaginationResponse = PaginatedResponse<ProductResponse>;
+
+/** `GET /rest/clients?page&limit` (`ClientsPaginationResponseDto`). */
+export type ClientsPaginationResponse = PaginatedResponse<ClientResponse>;
 
 /** `GET /rest/clients/all`. */
 export type ClientsListResponse = ClientResponse[];

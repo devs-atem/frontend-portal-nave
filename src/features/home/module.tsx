@@ -1,14 +1,13 @@
-import { Navigate } from "react-router-dom";
-
 import type { Module } from "@core/router/module.contract";
+import { HomeRedirect } from "@core/router/builtin/HomeRedirect";
 
 /**
- * Rota raiz — redireciona para o dashboard `/inicio`.
+ * Rota raiz — redireciona para a primeira tela acessível ao usuário (RBAC).
  * Sem entrada de menu (a navegação é feita pelos módulos de negócio).
  */
 const homeModule: Module = {
   name: "home",
-  routes: [{ path: "/", element: <Navigate to="/inicio" replace /> }],
+  routes: [{ path: "/", element: <HomeRedirect /> }],
 };
 
 export default homeModule;

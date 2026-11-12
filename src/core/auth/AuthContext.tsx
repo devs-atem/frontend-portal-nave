@@ -28,6 +28,9 @@ interface CognitoParsedToken {
 
 const AuthContext = createContext<AuthenticationContextData | null>(null);
 
+/** Refresh em andamento (evita chamadas duplicadas simultâneas). */
+let refreshInFlight: Promise<AuthenticationResponse> | null = null;
+
 interface AuthProviderProps {
   children?: ReactNode;
 }
@@ -81,7 +84,14 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           return null;
         }
 
-        const response = await authService.refresh(current);
+        // Compartilha a chamada em andamento: o StrictMode (dev) monta o
+        // bootstrap duas vezes e isso dispararia dois refresh seguidos.
+        refreshInFlight ??= authService
+          .refresh(current)
+          .finally(() => {
+            refreshInFlight = null;
+          });
+        const response = await refreshInFlight;
         const parsed = jwtDecode<CognitoParsedToken>(response.AccessToken);
         const nextRefreshTime = parsed.exp * 1_000 - bufferMs;
 
