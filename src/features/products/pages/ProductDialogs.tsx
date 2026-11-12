@@ -285,6 +285,133 @@ export const ProductClientsDialog = ({
   );
 };
 
+// ─── Vínculo do cliente com produtos ─────────────────────────────────────────
+
+interface ClientProductsDialogProps {
+  client: Cliente;
+  products: CatalogProduct[];
+  /** Ids (UUID) dos produtos hoje vinculados. */
+  initialIds: string[];
+  onClose: () => void;
+  /** Recebe a lista COMPLETA de ids selecionados (substituição total). */
+  onSubmit: (productIds: string[]) => Promise<void>;
+}
+
+export const ClientProductsDialog = ({
+  client,
+  products,
+  initialIds,
+  onClose,
+  onSubmit,
+}: ClientProductsDialogProps) => {
+  const [selected, setSelected] = useState<string[]>(initialIds);
+  const [search, setSearch] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const toggle = (id: string) =>
+    setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+
+  const term = search.trim().toLowerCase();
+  const visible = products.filter(
+    (p) =>
+      !term ||
+      p.name.toLowerCase().includes(term) ||
+      p.sapCode.toLowerCase().includes(term),
+  );
+
+  const unchanged =
+    selected.length === initialIds.length &&
+    selected.every((id) => initialIds.includes(id));
+
+  const submit = async () => {
+    setSaving(true);
+    setSubmitError(null);
+    try {
+      await onSubmit(selected);
+    } catch (err) {
+      setSubmitError(productErrorMessage(err, "save"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const close = () => {
+    if (!saving) onClose();
+  };
+
+  return (
+    <Modal open onClose={close} size="md">
+      <Modal.Header
+        title="Produtos do cliente"
+        subtitle={`${client.razao} (BP ${client.codigo})`}
+        onClose={close}
+      />
+      <Modal.Body>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <span style={hint}>
+            Vínculo cadastral (catálogo): <strong>não habilita</strong> o produto
+            em contratos — isso depende do vínculo do depositante. Ao salvar, a
+            seleção abaixo substitui todos os vínculos atuais.
+          </span>
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar produto por nome ou código SAP"
+            disabled={saving}
+          />
+          <div
+            style={{
+              maxHeight: 280,
+              overflowY: "auto",
+              border: "1px solid #E2E6EE",
+              borderRadius: 8,
+              padding: 8,
+              display: "flex",
+              flexDirection: "column",
+              gap: 6,
+            }}
+          >
+            {visible.length === 0 ? (
+              <span style={hint}>Nenhum produto encontrado.</span>
+            ) : (
+              visible.map((p) => (
+                <label
+                  key={p.id}
+                  style={{ ...label, flexDirection: "row", alignItems: "center", gap: 8, fontWeight: 400 }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(p.id)}
+                    onChange={() => toggle(p.id)}
+                    disabled={saving}
+                  />
+                  {p.name} ({p.sapCode})
+                </label>
+              ))
+            )}
+          </div>
+          <span style={hint}>{selected.length} produto(s) selecionado(s).</span>
+          {submitError && <span style={errorText}>{submitError}</span>}
+        </div>
+      </Modal.Body>
+      <Modal.Footer>
+        <Button variant="outlined" onClick={close} disabled={saving}>
+          Cancelar
+        </Button>
+        <Button
+          variant="contained"
+          onClick={submit}
+          loading={saving}
+          disabled={saving || unchanged}
+        >
+          Salvar vínculos
+        </Button>
+      </Modal.Footer>
+    </Modal>
+  );
+};
+
 // ─── Exclusão ────────────────────────────────────────────────────────────────
 
 interface DeleteProductDialogProps {

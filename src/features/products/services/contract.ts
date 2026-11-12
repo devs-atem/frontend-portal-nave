@@ -132,6 +132,12 @@ export interface UpdateProductRequest {
 /** `GET /rest/products/all`. */
 export type ProductsListResponse = ProductResponse[];
 
+/** `GET /rest/products?page&limit` (`ProductsPaginationResponseDto`). */
+export type ProductsPaginationResponse = PaginatedResponse<ProductResponse>;
+
+/** `GET /rest/clients?page&limit` (`ClientsPaginationResponseDto`). */
+export type ClientsPaginationResponse = PaginatedResponse<ClientResponse>;
+
 /** `GET /rest/clients/all`. */
 export type ClientsListResponse = ClientResponse[];
 

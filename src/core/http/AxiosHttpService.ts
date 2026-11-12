@@ -12,6 +12,7 @@ const ACCESS_DENIED_PATH = "/access-denied";
 
 export default class AxiosHttpService implements IHttpService {
   private readonly http: AxiosInstance;
+  private readonly inFlightGets = new Map<string, Promise<unknown>>();
 
   constructor() {
     this.http = Axios.create({
@@ -90,7 +91,20 @@ export default class AxiosHttpService implements IHttpService {
   }
 
   get<T>(path: string, params?: unknown) {
-    return this.request<T>("GET", path, undefined, params);
+    // Deduplica GETs idênticos em andamento (ex.: o StrictMode do React monta
+    // os efeitos duas vezes em dev). Ao concluir, a chave é liberada, então
+    // um novo GET (refresh/paginação) sempre vai à rede.
+    const key = `${path}?${JSON.stringify(params ?? null)}`;
+    const pending = this.inFlightGets.get(key);
+    if (pending) return pending as Promise<T>;
+
+    const promise = this.request<T>("GET", path, undefined, params).finally(
+      () => {
+        this.inFlightGets.delete(key);
+      },
+    );
+    this.inFlightGets.set(key, promise);
+    return promise;
   }
   post<T>(
     path: string,
