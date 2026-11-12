@@ -37,6 +37,8 @@ Cadastro das permissões do produto **`portal_nave`** (Navemazônia — Portal d
 | `portal_nave:reports:read` | Portal da Nave > Relatórios -> Consultar |
 | `portal_nave:contracts:read` | Portal da Nave > Contratos -> Consultar |
 | `portal_nave:contracts:write` | Portal da Nave > Contratos -> Cadastrar/Editar |
+| `portal_nave:contracts:approve` | Portal da Nave > Contratos -> Aprovar |
+| `portal_nave:contracts:status` | Portal da Nave > Contratos -> Suspender/Reativar/Encerrar/Cancelar |
 | `portal_nave:client_registry:read` | Portal da Nave > Administrador > Cadastro de clientes -> Consultar |
 | `portal_nave:admin:read` | Portal da Nave > Administrador > Administração -> Consultar |
 
@@ -120,7 +122,11 @@ Módulo de Contratos.
 ```
 portal_nave:contracts:read
 portal_nave:contracts:write
+portal_nave:contracts:approve
+portal_nave:contracts:status
 ```
+> Acesso a Contratos restrito a este grupo e ao `admin`; `nave_cliente` não recebe nenhuma chave `contracts`.
+> O back valida `app:custody:contract:{read,write,approve,status}` (e `owner:read`, `pool:read`, `operational-catalog:read` para os seletores). O front só controla a visibilidade; 403 é tratado nas telas. Pendência: o gestor precisa dessas chaves `app:custody:*` no RBAC do back (seed atual só dá `write/approve/status` ao administrador).
 > Se o gestor precisar de outras telas (ex.: Início), acrescentar as permissões aqui.
 
 ### `admin`
