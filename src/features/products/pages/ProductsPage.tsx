@@ -330,10 +330,16 @@ export const ProductsPage = () => {
 
   const handleLinkClients = async (product: CatalogProduct, ids: number[]) => {
     // Os ids numéricos são substitutos: a API recebe sempre os UUIDs reais.
-    const uuids = ids
-      .map((id) => svc.clientUuidOf(id))
-      .filter((u): u is string => !!u);
-    await svc.updateProduct(product.id, { clientUuids: uuids });
+    // `clientUuids` é substituição total: descartar um id sem UUID apagaria
+    // esse vínculo no backend, então aborta em vez de filtrar em silêncio.
+    const uuids = ids.map((id) => svc.clientUuidOf(id));
+    if (uuids.some((u) => !u)) {
+      toast.error(
+        "Não foi possível identificar alguns clientes selecionados. Recarregue a página e tente novamente.",
+      );
+      return;
+    }
+    await svc.updateProduct(product.id, { clientUuids: uuids as string[] });
     toast.success("Vínculos atualizados.");
     setDialog(null);
     refresh();
