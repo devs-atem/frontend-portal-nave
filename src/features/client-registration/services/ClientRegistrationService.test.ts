@@ -19,8 +19,8 @@ const apiClient = (over: Partial<ClientResponse> = {}): ClientResponse => ({
   ...over,
 });
 
-const make = (http: Partial<IHttpService>) =>
-  new ClientRegistrationService(http as IHttpService);
+const make = (http: Record<string, unknown>) =>
+  new ClientRegistrationService(http as unknown as IHttpService);
 
 describe("ClientRegistrationService", () => {
   it("list() chama GET /clients/all e mapeia a resposta", async () => {
@@ -75,6 +75,83 @@ describe("ClientRegistrationService", () => {
       bp: "1001",
       cnpj: { headquarters: "12345678000195", branches: ["98765432000110"] },
     });
+  });
+
+  it("get() pede contractFields e mapeia produtos e contratos", async () => {
+    const get = vi.fn(async () =>
+      apiClient({
+        products: [
+          { id: "p1", sapCode: "123", name: "Diesel", createdAt: "x", updatedAt: "x" },
+        ],
+        contracts: [{ id: "c1", contractNumber: "4600001234", status: "ACTIVE" }],
+      }),
+    );
+    const rec = await make({ get: get as unknown as IHttpService["get"] }).get(ID, { withContracts: true });
+
+    expect(get).toHaveBeenCalledWith(PRODUCTS_ENDPOINTS.clientById(ID), {
+      contractFields: "id,contractNumber,status,effectiveFrom,effectiveTo",
+    });
+    expect(rec.products).toEqual([{ id: "p1", name: "Diesel", sapCode: "123" }]);
+    expect(rec.contracts).toEqual([
+      { id: "c1", contractNumber: "4600001234", status: "ACTIVE" },
+    ]);
+  });
+
+  it("get() sem contratos não envia contractFields", async () => {
+    const get = vi.fn(async () => apiClient());
+    await make({ get: get as unknown as IHttpService["get"] }).get(ID);
+    expect(get).toHaveBeenCalledWith(PRODUCTS_ENDPOINTS.clientById(ID), undefined);
+  });
+
+  it("create() envia filiais normalizadas e nunca productIds", async () => {
+    const post = vi.fn(async () => apiClient());
+    await make({ post }).create({
+      cnpj: "12345678000195",
+      name: "Cliente Rio",
+      bpid: "1001",
+      branches: ["98.765.432/0001-10"],
+      productIds: ["p1"],
+    });
+    const body = (post.mock.calls[0] as unknown[])[1] as Record<string, unknown>;
+    expect(body.cnpj).toEqual({
+      headquarters: "12345678000195",
+      branches: ["98765432000110"],
+    });
+    expect(body).not.toHaveProperty("productIds");
+  });
+
+  it("update() envia productIds só quando definido (substituição total)", async () => {
+    const patch = vi.fn(async () => apiClient());
+    const input = { cnpj: "12345678000195", name: "Cliente Rio", bpid: "1001" };
+    await make({ patch }).update(ID, { ...input, productIds: [] });
+    await make({ patch }).update(ID, input);
+    const [withIds, without] = patch.mock.calls.map(
+      (c) => (c as unknown[])[1] as Record<string, unknown>,
+    );
+    expect(withIds.productIds).toEqual([]);
+    expect(without).not.toHaveProperty("productIds");
+  });
+
+  it("update() prioriza input.branches e aceita lista vazia", async () => {
+    const patch = vi.fn(async () => apiClient());
+    await make({ patch }).update(
+      ID,
+      { cnpj: "12345678000195", name: "C", bpid: "1", branches: [] },
+      ["98765432000110"],
+    );
+    const body = (patch.mock.calls[0] as unknown[])[1] as {
+      cnpj: { branches: string[] };
+    };
+    expect(body.cnpj.branches).toEqual([]);
+  });
+
+  it("listProductOptions() chama GET /products/all e mapeia", async () => {
+    const get = vi.fn(async () => [
+      { id: "p1", sapCode: "123", name: "Diesel", createdAt: "x", updatedAt: "x" },
+    ]);
+    const opts = await make({ get: get as unknown as IHttpService["get"] }).listProductOptions();
+    expect(get).toHaveBeenCalledWith(PRODUCTS_ENDPOINTS.products);
+    expect(opts).toEqual([{ id: "p1", name: "Diesel", sapCode: "123" }]);
   });
 
   it("remove() chama DELETE em /clients/:id", async () => {
