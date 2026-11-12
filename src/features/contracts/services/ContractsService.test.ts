@@ -159,10 +159,24 @@ describe("ReferenceService", () => {
     expect(get).toHaveBeenCalledWith(CONTRACTS_ENDPOINTS.pools, { source: "S", baseCode: "SSA", page: 1, limit: 100 });
   });
 
-  it("listBases pede apenas bases ativas", async () => {
-    const get = vi.fn(async () => ({ rows: [], total: 0 }));
-    await new ReferenceService(mk({ get })).listBases();
-    expect(get).toHaveBeenCalledWith(CONTRACTS_ENDPOINTS.bases, { status: "ACTIVE", page: 1, limit: 100 });
+  it("listBases usa GET /operational-catalog/bases/all (sem paginação) e mantém só as ativas", async () => {
+    const base = (baseCode: string, status: string) => ({
+      id: baseCode, source: "SAP", baseCode, name: baseCode, status,
+    });
+    const get = vi.fn(async () => [base("C001", "ACTIVE"), base("C002", "INACTIVE"), base("C009", "ACTIVE")]);
+    const result = await new ReferenceService(mk({ get })).listBases();
+
+    expect(get).toHaveBeenCalledTimes(1);
+    expect(get).toHaveBeenCalledWith(CONTRACTS_ENDPOINTS.basesAll);
+    expect(CONTRACTS_ENDPOINTS.basesAll).toBe("/rest/operational-catalog/bases/all");
+    expect(result.map((b) => b.baseCode)).toEqual(["C001", "C009"]);
+  });
+
+  it("listBases aceita { rows } e resposta vazia", async () => {
+    const rows = vi.fn(async () => ({ rows: [{ id: "1", source: "S", baseCode: "B", name: "B", status: "ACTIVE" }] }));
+    expect(await new ReferenceService(mk({ get: rows })).listBases()).toHaveLength(1);
+    const none = vi.fn(async () => undefined);
+    expect(await new ReferenceService(mk({ get: none })).listBases()).toEqual([]);
   });
 });
 

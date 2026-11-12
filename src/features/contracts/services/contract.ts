@@ -294,6 +294,8 @@ export const CONTRACTS_ENDPOINTS = {
     `${REST_PREFIX}/owners/${enc(ownerId)}/products/${enc(productId)}`,
 
   bases: `${REST_PREFIX}/operational-catalog/bases`,
+  /** Sem paginação — usado nos selects de base. */
+  basesAll: `${REST_PREFIX}/operational-catalog/bases/all`,
   tanks: `${REST_PREFIX}/operational-catalog/tanks`,
   pools: `${REST_PREFIX}/pools`,
 } as const;

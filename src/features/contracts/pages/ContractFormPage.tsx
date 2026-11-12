@@ -26,18 +26,6 @@ import {
 
 export type ContractFormMode = "create" | "edit" | "revision";
 
-/**
- * MOCK TEMPORÁRIO das bases do formulário (C001 e C009), até o back expor o
- * catálogo de bases. A base continua obrigatória e `source` + `baseCode` são
- * enviados no contrato. Ajuste `MOCK_BASE_SOURCE` para o `source` real das
- * bases, se o back exigir um valor específico.
- */
-const MOCK_BASE_SOURCE = "SAP";
-const MOCK_BASES: BaseResponse[] = [
-  { id: "mock-c001", source: MOCK_BASE_SOURCE, baseCode: "C001", name: "C001", status: "ACTIVE" },
-  { id: "mock-c009", source: MOCK_BASE_SOURCE, baseCode: "C009", name: "C009", status: "ACTIVE" },
-];
-
 const label: CSSProperties = {
   fontSize: 12,
   fontWeight: 600,
@@ -84,8 +72,9 @@ export const ContractFormPage = ({ mode }: { mode: ContractFormMode }) => {
   const [ownersList, setOwnersList] = useState<OwnerOption[]>([]);
   /** Falha ao carregar `GET /rest/owners/all` (null = carregou). */
   const [ownersError, setOwnersError] = useState<string | null>(null);
-  // MOCK (temporário): bases fixas até o back expor o catálogo de bases.
-  const bases = MOCK_BASES;
+  const [bases, setBases] = useState<BaseResponse[]>([]);
+  /** Falha ao carregar `GET /rest/operational-catalog/bases/all` (null = carregou). */
+  const [basesError, setBasesError] = useState<string | null>(null);
   const [ownerProducts, setOwnerProducts] = useState<OwnerProductResponse[]>([]);
   const [ownerProductsLoading, setOwnerProductsLoading] = useState(false);
 
@@ -96,7 +85,52 @@ export const ContractFormPage = ({ mode }: { mode: ContractFormMode }) => {
   const isRevision = mode === "revision";
   const backPath = id ? `/contratos/${id}` : "/contratos";
 
-  // ─── Carga inicial: contrato (edição/revisão) + catálogos ──────────────────
+  // ─── Catálogos dos selects: cargas INDEPENDENTES ───────────────────────────
+  // Depositantes e bases não bloqueiam um ao outro nem o formulário: uma base
+  // lenta/sem permissão não impede o select de depositantes (e vice-versa).
+  useEffect(() => {
+    let cancelled = false;
+    setOwnersError(null);
+    owners
+      .listOptions()
+      .then((rows) => {
+        if (!cancelled) setOwnersList(rows);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setOwnersError(
+          errorStatus(err) === 403
+            ? "Sem permissão para listar depositantes."
+            : contractErrorMessage(err, "Não foi possível carregar os depositantes."),
+        );
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [owners]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setBasesError(null);
+    reference
+      .listBases()
+      .then((rows) => {
+        if (!cancelled) setBases(rows);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setBasesError(
+          errorStatus(err) === 403
+            ? "Sem permissão para listar bases."
+            : contractErrorMessage(err, "Não foi possível carregar as bases."),
+        );
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [reference]);
+
+  // ─── Carga inicial: contrato (edição/revisão) ──────────────────────────────
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -107,18 +141,7 @@ export const ContractFormPage = ({ mode }: { mode: ContractFormMode }) => {
       if (loadedContract && mode === "edit" && loadedContract.status !== "DRAFT") {
         throw new Error("Só contratos em rascunho podem ser editados.");
       }
-      const [o] = await Promise.allSettled([owners.listOptions()]);
       if (cancelled) return;
-      if (o.status === "fulfilled") {
-        setOwnersList(o.value);
-        setOwnersError(null);
-      } else {
-        setOwnersError(
-          errorStatus(o.reason) === 403
-            ? "Sem permissão para listar depositantes."
-            : contractErrorMessage(o.reason, "Não foi possível carregar os depositantes."),
-        );
-      }
 
       if (loadedContract) {
         setContract(loadedContract);
@@ -148,7 +171,7 @@ export const ContractFormPage = ({ mode }: { mode: ContractFormMode }) => {
     return () => {
       cancelled = true;
     };
-  }, [mode, id, contracts, owners, reference]);
+  }, [mode, id, contracts]);
 
   // ─── Produtos do depositante (pré-requisito dos itens) ─────────────────────
   useEffect(() => {
@@ -387,7 +410,7 @@ export const ContractFormPage = ({ mode }: { mode: ContractFormMode }) => {
               )}
             </div>
             <div style={label}>
-              Base (mock) *
+              Base *
               <Select<string>
                 size="sm"
                 value={baseKey}
@@ -400,6 +423,11 @@ export const ContractFormPage = ({ mode }: { mode: ContractFormMode }) => {
                 disabled={saving}
               />
               {errors.base && <span style={errorText}>{errors.base}</span>}
+              {basesError ? (
+                <span style={errorText}>{basesError}</span>
+              ) : (
+                bases.length === 0 && <span style={hint}>Nenhuma base disponível.</span>
+              )}
             </div>
             <label style={label}>
               Início da vigência *

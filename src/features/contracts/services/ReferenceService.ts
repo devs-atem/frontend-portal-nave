@@ -41,10 +41,16 @@ export interface IReferenceService {
 export class ReferenceService implements IReferenceService {
   constructor(private readonly http: IHttpService) {}
 
-  listBases(): Promise<BaseResponse[]> {
-    return fetchAllPages<BaseResponse>(this.http, CONTRACTS_ENDPOINTS.bases, {
-      status: "ACTIVE",
-    });
+  /**
+   * Bases ativas para selects (`GET /rest/operational-catalog/bases/all`, sem
+   * paginação). Aceita array direto ou `{ rows }`; mantém só as ACTIVE.
+   */
+  async listBases(): Promise<BaseResponse[]> {
+    const resp = await this.http.get<BaseResponse[] | { rows?: BaseResponse[] }>(
+      CONTRACTS_ENDPOINTS.basesAll,
+    );
+    const rows = Array.isArray(resp) ? resp : (resp?.rows ?? []);
+    return rows.filter((b) => !b.status || b.status === "ACTIVE");
   }
 
   listPools(q: { source: string; baseCode: string; productCode?: string }): Promise<PoolResponse[]> {

@@ -107,18 +107,22 @@ export const ContractsPage = () => {
   const [bases, setBases] = useState<BaseResponse[]>([]);
   const [clients, setClients] = useState<ClientRecord[]>([]);
 
+  // Cada catálogo carrega de forma independente: um lento/sem acesso não
+  // segura os outros filtros.
   useEffect(() => {
     let cancelled = false;
-    void Promise.allSettled([
-      owners.listOptions(),
-      reference.listBases(),
-      clientsSvc.list(),
-    ]).then(([o, b, c]) => {
-      if (cancelled) return;
-      if (o.status === "fulfilled") setOwnersList(o.value);
-      if (b.status === "fulfilled") setBases(b.value);
-      if (c.status === "fulfilled") setClients(c.value);
-    });
+    owners.listOptions().then(
+      (v) => !cancelled && setOwnersList(v),
+      () => undefined,
+    );
+    reference.listBases().then(
+      (v) => !cancelled && setBases(v),
+      () => undefined,
+    );
+    clientsSvc.list().then(
+      (v) => !cancelled && setClients(v),
+      () => undefined,
+    );
     return () => {
       cancelled = true;
     };
