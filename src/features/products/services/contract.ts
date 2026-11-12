@@ -100,17 +100,6 @@ export interface PaginatedResponse<T> {
   total: number;
 }
 
-/** Query de paginação (`page` base 1; `limit` entre 1 e 100). */
-export interface PaginationParams {
-  page?: number;
-  limit?: number;
-}
-
-/** Resposta de `DELETE` em produtos e clientes. */
-export interface DeleteResponse {
-  success: boolean;
-}
-
 /** `POST /rest/products` (`CreateProductDto`). */
 export interface CreateProductRequest {
   name: string;

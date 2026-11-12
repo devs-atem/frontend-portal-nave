@@ -67,13 +67,13 @@ export function toClientRecord(c: ClientResponse): ClientRecord {
   };
 }
 
-/** Contrato do service de cadastro de clientes (API real ou mock). */
 /** Uma página de clientes + total geral (de todas as páginas). */
 export interface ClientsPage {
   rows: ClientRecord[];
   total: number;
 }
 
+/** Contrato do service de cadastro de clientes (mw-nave `/rest/clients`). */
 export interface IClientRegistrationService {
   /** Página de clientes (`GET /rest/clients?page&limit`) — usada na tela de cadastro. */
   listPage(q: { page: number; limit: number }): Promise<ClientsPage>;
@@ -84,10 +84,14 @@ export interface IClientRegistrationService {
   list(): Promise<ClientRecord[]>;
   get(id: string, opts?: { withContracts?: boolean }): Promise<ClientRecord>;
   create(input: ClientRecordInput): Promise<ClientRecord>;
+  /**
+   * `currentBranches` é obrigatório: a API substitui todas as filiais, então
+   * omitir a lista apagaria as filiais existentes. `input.branches` tem prioridade.
+   */
   update(
     id: string,
     input: ClientRecordInput,
-    branches?: string[],
+    currentBranches: string[],
   ): Promise<ClientRecord>;
   remove(id: string): Promise<void>;
   listProductOptions(): Promise<ProductOption[]>;
@@ -170,14 +174,14 @@ export class ClientRegistrationService implements IClientRegistrationService {
   async update(
     id: string,
     input: ClientRecordInput,
-    branches: string[] = [],
+    currentBranches: string[],
   ): Promise<ClientRecord> {
     const body: UpdateClientRequest = {
       name: input.name,
       bp: input.bpid,
       cnpj: {
         headquarters: normalizeCnpj(input.cnpj),
-        branches: (input.branches ?? branches).map(normalizeCnpj),
+        branches: (input.branches ?? currentBranches).map(normalizeCnpj),
       },
       ...(input.active !== undefined ? { isActive: input.active } : {}),
       ...(input.productIds !== undefined ? { productIds: input.productIds } : {}),

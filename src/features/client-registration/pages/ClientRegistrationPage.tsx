@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
@@ -29,6 +29,12 @@ import type {
   ClientRecordInput,
   ProductOption,
 } from "../services/ClientRegistrationService";
+import {
+  buildProductIdsPatch,
+  errorMessage,
+  errorStatus,
+  type ProductsLoadState,
+} from "../clientRules";
 
 const label: CSSProperties = {
   fontSize: 12,
@@ -60,24 +66,6 @@ type FormErrors = Partial<Record<"cnpj" | "name" | "bpid" | "branch", string>>;
 
 const EMPTY: FormState = { cnpj: "", name: "", bpid: "", active: true };
 
-/**
- * Mensagem amigável por status HTTP. No 409 a API devolve a mensagem em
- * português (BP ou CNPJ da matriz duplicado, `productIds` repetido): exibe-a.
- */
-const errorMessage = (err: unknown, fallback: string): string => {
-  const status = err as { status?: number; statusCode?: number } | null;
-  const code = status?.status ?? status?.statusCode;
-  const msg = err instanceof Error ? err.message : "";
-  if (code === 409) return msg || "Já existe um cliente com este BP ou CNPJ.";
-  if (code === 400) {
-    return /cnpj/i.test(msg)
-      ? "CNPJ inválido."
-      : "Dados inválidos. Revise os campos informados.";
-  }
-  if (code === 404) return "Cliente ou produto não encontrado.";
-  return msg || fallback;
-};
-
 const formatDate = (iso?: string): string => {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -86,9 +74,6 @@ const formatDate = (iso?: string): string => {
 
 const statusTone = (status?: string): StatusTagStatus =>
   status === "ACTIVE" ? "success" : status === "SUSPENDED" ? "warning" : "neutral";
-
-const sameSet = (a: string[], b: string[]): boolean =>
-  a.length === b.length && a.every((x) => b.includes(x));
 
 const PageHeader = ({ onCreate }: { onCreate?: () => void }) => (
   <PageTitleCard
@@ -219,10 +204,10 @@ export const ClientRegistrationPage = () => {
   const [productOptions, setProductOptions] = useState<ProductOption[]>([]);
   const [productIds, setProductIds] = useState<string[]>([]);
   const [initialProductIds, setInitialProductIds] = useState<string[]>([]);
-  const [productsState, setProductsState] = useState<
-    "idle" | "loading" | "ready" | "error"
-  >("idle");
+  const [productsState, setProductsState] = useState<ProductsLoadState>("idle");
   const [productSearch, setProductSearch] = useState("");
+  /** Id da última carga de produtos do formulário (descarta respostas antigas). */
+  const editRequest = useRef(0);
 
   // ─── Detalhe (leitura) ─────────────────────────────────────────────────────
   const [detail, setDetail] = useState<ClientRecord | null>(null);
@@ -250,6 +235,7 @@ export const ClientRegistrationPage = () => {
   };
 
   const openCreate = () => {
+    editRequest.current++; // invalida carga de produtos de uma edição anterior
     setEditing(null);
     setForm(EMPTY);
     setErrors({});
@@ -267,20 +253,31 @@ export const ClientRegistrationPage = () => {
 
     // Carrega os produtos vinculados (detalhe) e as opções do catálogo. Enquanto
     // não terminar, `productIds` não é enviado (evita sobrescrever com lista vazia).
+    // Só aplica a resposta se este ainda for o formulário aberto: sem isso,
+    // fechar e abrir outro cliente antes da resposta colocaria os produtos do
+    // cliente anterior no formulário novo, e o PATCH substituiria os vínculos
+    // do cliente certo pelos do errado.
+    const requestId = ++editRequest.current;
+    const isCurrent = () => editRequest.current === requestId;
     setProductsState("loading");
     Promise.all([svc.get(c.id), svc.listProductOptions()])
       .then(([full, options]) => {
+        if (!isCurrent()) return;
         const ids = (full.products ?? []).map((p) => p.id);
         setProductOptions(options);
         setProductIds(ids);
         setInitialProductIds(ids);
         setProductsState("ready");
       })
-      .catch(() => setProductsState("error"));
+      .catch(() => {
+        if (isCurrent()) setProductsState("error");
+      });
   };
 
   const closeForm = () => {
-    if (!saving) setOpen(false);
+    if (saving) return;
+    editRequest.current++; // descarta carga de produtos ainda pendente
+    setOpen(false);
   };
 
   const addBranch = () => {
@@ -331,12 +328,9 @@ export const ClientRegistrationPage = () => {
       branches,
     };
     // Substituição total: só envia produtos se o detalhe foi carregado e houve mudança.
-    if (
-      editing &&
-      productsState === "ready" &&
-      !sameSet(productIds, initialProductIds)
-    ) {
-      input.productIds = productIds;
+    if (editing) {
+      const patch = buildProductIdsPatch(productIds, initialProductIds, productsState);
+      if (patch) input.productIds = patch;
     }
     setSaving(true);
     try {
@@ -350,11 +344,21 @@ export const ClientRegistrationPage = () => {
       setOpen(false);
       reload();
     } catch (err) {
-      toast.error(errorMessage(err, "Não foi possível salvar o cliente."));
-      if ((err as { status?: number } | null)?.status === 404) {
-        setOpen(false);
-        reload();
+      // 404 pode ser produto inexistente em productIds (mantém o formulário
+      // aberto) ou cliente removido em outra sessão (aí fecha e recarrega).
+      if (editing && errorStatus(err) === 404) {
+        const stillExists = await svc
+          .get(editing.id)
+          .then(() => true)
+          .catch((e: unknown) => errorStatus(e) !== 404);
+        if (!stillExists) {
+          toast.error("Este cliente não existe mais. A lista foi atualizada.");
+          setOpen(false);
+          reload();
+          return;
+        }
       }
+      toast.error(errorMessage(err, "Não foi possível salvar o cliente."));
     } finally {
       setSaving(false);
     }

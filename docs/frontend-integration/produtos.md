@@ -69,7 +69,7 @@ Para adicionar um cliente, envie a lista completa. `clientIds` repetidos → 409
 ## 4. Relações
 
 - **Produto ↔ Cliente (N:N)**: cadastral, via `clientIds` (aqui) ou `productIds` (em `PATCH /clients/:id`). Substituição total nos dois lados.
-- **Produto ↔ Owner (`OwnerProduct`)**: habilita o produto para o depositante e guarda o rótulo do cliente (`customerProductCode`, `customerProductDescription`). **É pré-requisito para usar o produto em contrato.** Ver `contratos.md`.
+- **Produto ↔ Owner (`OwnerProduct`)**: habilita o produto para o depositante e guarda o rótulo do cliente (`customerProductCode`, `customerProductDescription`). **É pré-requisito para usar o produto em contrato.** Os detalhes do módulo de contratos ficam em `contratos.md`, adicionado no PR de contratos (3/3).
 - **Produto → Contrato**: via itens da revisão do contrato (`ContractRevisionItem`). Não há tabela direta contrato-produto.
 - No contrato, `productCode` do item **deve ser igual ao `sapCode`** do produto.
 
