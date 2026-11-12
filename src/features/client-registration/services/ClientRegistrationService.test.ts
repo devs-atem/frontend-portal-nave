@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, type Mock } from "vitest";
 
 import type { IHttpService } from "@core/http/models/IHttpService";
 import { PRODUCTS_ENDPOINTS, type ClientResponse } from "@features/products/services/contract";
@@ -19,7 +19,10 @@ const apiClient = (over: Partial<ClientResponse> = {}): ClientResponse => ({
   ...over,
 });
 
-const make = (http: Record<string, unknown>) =>
+// Mock parcial: só os métodos usados em cada teste. O cast único é
+// intencional (Mock do Vitest não satisfaz os genéricos de IHttpService).
+type HttpMock = { [K in keyof IHttpService]?: Mock };
+const make = (http: HttpMock) =>
   new ClientRegistrationService(http as unknown as IHttpService);
 
 describe("ClientRegistrationService", () => {
@@ -111,7 +114,7 @@ describe("ClientRegistrationService", () => {
         contracts: [{ id: "c1", contractNumber: "4600001234", status: "ACTIVE" }],
       }),
     );
-    const rec = await make({ get: get as unknown as IHttpService["get"] }).get(ID, { withContracts: true });
+    const rec = await make({ get }).get(ID, { withContracts: true });
 
     expect(get).toHaveBeenCalledWith(PRODUCTS_ENDPOINTS.clientById(ID), {
       contractFields: "id,contractNumber,status,effectiveFrom,effectiveTo",
@@ -124,7 +127,7 @@ describe("ClientRegistrationService", () => {
 
   it("get() sem contratos não envia contractFields", async () => {
     const get = vi.fn(async () => apiClient());
-    await make({ get: get as unknown as IHttpService["get"] }).get(ID);
+    await make({ get }).get(ID);
     expect(get).toHaveBeenCalledWith(PRODUCTS_ENDPOINTS.clientById(ID), undefined);
   });
 
@@ -148,8 +151,8 @@ describe("ClientRegistrationService", () => {
   it("update() envia productIds só quando definido (substituição total)", async () => {
     const patch = vi.fn(async () => apiClient());
     const input = { cnpj: "12345678000195", name: "Cliente Rio", bpid: "1001" };
-    await make({ patch }).update(ID, { ...input, productIds: [] });
-    await make({ patch }).update(ID, input);
+    await make({ patch }).update(ID, { ...input, productIds: [] }, []);
+    await make({ patch }).update(ID, input, []);
     const [withIds, without] = patch.mock.calls.map(
       (c) => (c as unknown[])[1] as Record<string, unknown>,
     );
@@ -174,7 +177,7 @@ describe("ClientRegistrationService", () => {
     const get = vi.fn(async () => [
       { id: "p1", sapCode: "123", name: "Diesel", createdAt: "x", updatedAt: "x" },
     ]);
-    const opts = await make({ get: get as unknown as IHttpService["get"] }).listProductOptions();
+    const opts = await make({ get }).listProductOptions();
     expect(get).toHaveBeenCalledWith(PRODUCTS_ENDPOINTS.products);
     expect(opts).toEqual([{ id: "p1", name: "Diesel", sapCode: "123" }]);
   });

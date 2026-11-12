@@ -29,6 +29,12 @@ import type {
   ClientRecordInput,
   ProductOption,
 } from "../services/ClientRegistrationService";
+import {
+  buildProductIdsPatch,
+  errorMessage,
+  errorStatus,
+  type ProductsLoadState,
+} from "../clientRules";
 
 const label: CSSProperties = {
   fontSize: 12,
@@ -60,24 +66,6 @@ type FormErrors = Partial<Record<"cnpj" | "name" | "bpid" | "branch", string>>;
 
 const EMPTY: FormState = { cnpj: "", name: "", bpid: "", active: true };
 
-/**
- * Mensagem amigável por status HTTP. No 409 a API devolve a mensagem em
- * português (BP ou CNPJ da matriz duplicado, `productIds` repetido): exibe-a.
- */
-const errorMessage = (err: unknown, fallback: string): string => {
-  const status = err as { status?: number; statusCode?: number } | null;
-  const code = status?.status ?? status?.statusCode;
-  const msg = err instanceof Error ? err.message : "";
-  if (code === 409) return msg || "Já existe um cliente com este BP ou CNPJ.";
-  if (code === 400) {
-    return /cnpj/i.test(msg)
-      ? "CNPJ inválido."
-      : "Dados inválidos. Revise os campos informados.";
-  }
-  if (code === 404) return "Cliente ou produto não encontrado.";
-  return msg || fallback;
-};
-
 const formatDate = (iso?: string): string => {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -86,9 +74,6 @@ const formatDate = (iso?: string): string => {
 
 const statusTone = (status?: string): StatusTagStatus =>
   status === "ACTIVE" ? "success" : status === "SUSPENDED" ? "warning" : "neutral";
-
-const sameSet = (a: string[], b: string[]): boolean =>
-  a.length === b.length && a.every((x) => b.includes(x));
 
 const PageHeader = ({ onCreate }: { onCreate?: () => void }) => (
   <PageTitleCard
@@ -219,9 +204,7 @@ export const ClientRegistrationPage = () => {
   const [productOptions, setProductOptions] = useState<ProductOption[]>([]);
   const [productIds, setProductIds] = useState<string[]>([]);
   const [initialProductIds, setInitialProductIds] = useState<string[]>([]);
-  const [productsState, setProductsState] = useState<
-    "idle" | "loading" | "ready" | "error"
-  >("idle");
+  const [productsState, setProductsState] = useState<ProductsLoadState>("idle");
   const [productSearch, setProductSearch] = useState("");
 
   // ─── Detalhe (leitura) ─────────────────────────────────────────────────────
@@ -331,12 +314,9 @@ export const ClientRegistrationPage = () => {
       branches,
     };
     // Substituição total: só envia produtos se o detalhe foi carregado e houve mudança.
-    if (
-      editing &&
-      productsState === "ready" &&
-      !sameSet(productIds, initialProductIds)
-    ) {
-      input.productIds = productIds;
+    if (editing) {
+      const patch = buildProductIdsPatch(productIds, initialProductIds, productsState);
+      if (patch) input.productIds = patch;
     }
     setSaving(true);
     try {
@@ -350,11 +330,21 @@ export const ClientRegistrationPage = () => {
       setOpen(false);
       reload();
     } catch (err) {
-      toast.error(errorMessage(err, "Não foi possível salvar o cliente."));
-      if ((err as { status?: number } | null)?.status === 404) {
-        setOpen(false);
-        reload();
+      // 404 pode ser produto inexistente em productIds (mantém o formulário
+      // aberto) ou cliente removido em outra sessão (aí fecha e recarrega).
+      if (editing && errorStatus(err) === 404) {
+        const stillExists = await svc
+          .get(editing.id)
+          .then(() => true)
+          .catch((e: unknown) => errorStatus(e) !== 404);
+        if (!stillExists) {
+          toast.error("Este cliente não existe mais. A lista foi atualizada.");
+          setOpen(false);
+          reload();
+          return;
+        }
       }
+      toast.error(errorMessage(err, "Não foi possível salvar o cliente."));
     } finally {
       setSaving(false);
     }
