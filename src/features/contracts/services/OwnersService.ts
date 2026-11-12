@@ -4,6 +4,7 @@ import {
   CONTRACTS_ENDPOINTS,
   type OwnerListQuery,
   type OwnerProductInput,
+  type OwnerOption,
   type OwnerProductResponse,
   type OwnerResponse,
   type Paginated,
@@ -11,6 +12,11 @@ import {
 import { cleanQuery, fetchAllPages, toPaginated } from "./ContractsService";
 
 export interface IOwnersService {
+  /**
+   * Opções para select de depositantes (`GET /rest/owners/all`): só ACTIVE,
+   * ordenado por `internalCode`, filtrado pelo escopo do usuário. Pode ser `[]`.
+   */
+  listOptions(): Promise<OwnerOption[]>;
   list(q?: OwnerListQuery): Promise<Paginated<OwnerResponse>>;
   /** Todos os Owners (todas as páginas) com o filtro informado. */
   listAll(q?: Pick<OwnerListQuery, "status">): Promise<OwnerResponse[]>;
@@ -33,6 +39,13 @@ export interface IOwnersService {
 /** Service de depositantes (`/rest/owners`) e seus produtos habilitados. */
 export class OwnersService implements IOwnersService {
   constructor(private readonly http: IHttpService) {}
+
+  async listOptions(): Promise<OwnerOption[]> {
+    console.log(`[Owners] GET ${CONTRACTS_ENDPOINTS.ownersAll} (select de depositantes)`);
+    const resp = await this.http.get<OwnerOption[]>(CONTRACTS_ENDPOINTS.ownersAll);
+    console.log("[Owners] resposta:", resp);
+    return Array.isArray(resp) ? resp : [];
+  }
 
   async list(q: OwnerListQuery = {}): Promise<Paginated<OwnerResponse>> {
     const resp = await this.http.get<Paginated<OwnerResponse>>(

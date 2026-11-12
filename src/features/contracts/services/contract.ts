@@ -207,6 +207,13 @@ export interface OwnerResponse {
   status: "ACTIVE" | "INACTIVE" | string;
 }
 
+/** Item de `GET /rest/owners/all` (só depositantes ACTIVE do escopo do usuário). */
+export interface OwnerOption {
+  id: string;
+  internalCode: string;
+  legalName: string;
+}
+
 export interface OwnerListQuery {
   page?: number;
   limit?: number;
@@ -278,6 +285,8 @@ export const CONTRACTS_ENDPOINTS = {
     `${REST_PREFIX}/contracts/${enc(id)}/revisions`,
 
   owners: `${REST_PREFIX}/owners`,
+  /** Sem paginação: só ACTIVE, ordenado por internalCode, filtrado pelo RBAC. */
+  ownersAll: `${REST_PREFIX}/owners/all`,
   ownerById: (id: string): string => `${REST_PREFIX}/owners/${enc(id)}`,
   ownerProducts: (ownerId: string): string =>
     `${REST_PREFIX}/owners/${enc(ownerId)}/products`,

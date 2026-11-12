@@ -9,7 +9,7 @@ import type {
   BaseResponse,
   ContractResponse,
   OwnerProductResponse,
-  OwnerResponse,
+  OwnerOption,
 } from "../services/contract";
 import { contractErrorMessage, errorStatus, isStaleStateError } from "../services/contractErrors";
 import {
@@ -25,6 +25,18 @@ import {
 } from "../services/contractRules";
 
 export type ContractFormMode = "create" | "edit" | "revision";
+
+/**
+ * MOCK TEMPORÁRIO das bases do formulário (C001 e C009), até o back expor o
+ * catálogo de bases. A base continua obrigatória e `source` + `baseCode` são
+ * enviados no contrato. Ajuste `MOCK_BASE_SOURCE` para o `source` real das
+ * bases, se o back exigir um valor específico.
+ */
+const MOCK_BASE_SOURCE = "SAP";
+const MOCK_BASES: BaseResponse[] = [
+  { id: "mock-c001", source: MOCK_BASE_SOURCE, baseCode: "C001", name: "C001", status: "ACTIVE" },
+  { id: "mock-c009", source: MOCK_BASE_SOURCE, baseCode: "C009", name: "C009", status: "ACTIVE" },
+];
 
 const label: CSSProperties = {
   fontSize: 12,
@@ -69,8 +81,11 @@ export const ContractFormPage = ({ mode }: { mode: ContractFormMode }) => {
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const [ownersList, setOwnersList] = useState<OwnerResponse[]>([]);
-  const [bases, setBases] = useState<BaseResponse[]>([]);
+  const [ownersList, setOwnersList] = useState<OwnerOption[]>([]);
+  /** Falha ao carregar `GET /rest/owners/all` (null = carregou). */
+  const [ownersError, setOwnersError] = useState<string | null>(null);
+  // MOCK (temporário): bases fixas até o back expor o catálogo de bases.
+  const bases = MOCK_BASES;
   const [ownerProducts, setOwnerProducts] = useState<OwnerProductResponse[]>([]);
   const [ownerProductsLoading, setOwnerProductsLoading] = useState(false);
 
@@ -92,13 +107,18 @@ export const ContractFormPage = ({ mode }: { mode: ContractFormMode }) => {
       if (loadedContract && mode === "edit" && loadedContract.status !== "DRAFT") {
         throw new Error("Só contratos em rascunho podem ser editados.");
       }
-      const [o, b] = await Promise.allSettled([
-        owners.listAll({ status: "ACTIVE" }),
-        reference.listBases(),
-      ]);
+      const [o] = await Promise.allSettled([owners.listOptions()]);
       if (cancelled) return;
-      if (o.status === "fulfilled") setOwnersList(o.value);
-      if (b.status === "fulfilled") setBases(b.value);
+      if (o.status === "fulfilled") {
+        setOwnersList(o.value);
+        setOwnersError(null);
+      } else {
+        setOwnersError(
+          errorStatus(o.reason) === 403
+            ? "Sem permissão para listar depositantes."
+            : contractErrorMessage(o.reason, "Não foi possível carregar os depositantes."),
+        );
+      }
 
       if (loadedContract) {
         setContract(loadedContract);
@@ -295,7 +315,7 @@ export const ContractFormPage = ({ mode }: { mode: ContractFormMode }) => {
 
   const ownerLabel = (oid: string): string => {
     const o = ownersList.find((x) => x.id === oid);
-    return o ? `${o.legalName} (${o.internalCode})` : contract?.owner?.legalName ?? (oid ? "Depositante atual" : "Selecione");
+    return o ? `${o.internalCode} - ${o.legalName}` : contract?.owner?.legalName ?? (oid ? "Depositante atual" : "Selecione");
   };
   const baseKey = form.source && form.baseCode ? `${form.source}|${form.baseCode}` : "";
   const baseLabel = (k: string): string => {
@@ -358,12 +378,16 @@ export const ContractFormPage = ({ mode }: { mode: ContractFormMode }) => {
                 disabled={saving}
               />
               {errors.ownerId && <span style={errorText}>{errors.ownerId}</span>}
-              {ownersList.length === 0 && (
-                <span style={hint}>Nenhum depositante ativo disponível para você.</span>
+              {ownersError ? (
+                <span style={errorText}>{ownersError}</span>
+              ) : (
+                ownersList.length === 0 && (
+                  <span style={hint}>Nenhum depositante disponível.</span>
+                )
               )}
             </div>
             <div style={label}>
-              Base *
+              Base (mock) *
               <Select<string>
                 size="sm"
                 value={baseKey}

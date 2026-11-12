@@ -23,7 +23,7 @@ import {
   type ContractListQuery,
   type ContractResponse,
   type ContractStatus,
-  type OwnerResponse,
+  type OwnerOption,
 } from "../services/contract";
 import { contractErrorMessage } from "../services/contractErrors";
 import { clientCnpjs, clientOwnsCnpj, formatDate } from "../services/contractRules";
@@ -103,14 +103,14 @@ export const ContractsPage = () => {
   const [params] = useSearchParams();
 
   // ─── Dados de apoio (tolerantes a falha: sem acesso, a tela segue funcionando) ───
-  const [ownersList, setOwnersList] = useState<OwnerResponse[]>([]);
+  const [ownersList, setOwnersList] = useState<OwnerOption[]>([]);
   const [bases, setBases] = useState<BaseResponse[]>([]);
   const [clients, setClients] = useState<ClientRecord[]>([]);
 
   useEffect(() => {
     let cancelled = false;
     void Promise.allSettled([
-      owners.listAll(),
+      owners.listOptions(),
       reference.listBases(),
       clientsSvc.list(),
     ]).then(([o, b, c]) => {
@@ -232,7 +232,7 @@ export const ContractsPage = () => {
     c.owner?.legalName ?? ownerById.get(c.ownerId)?.legalName ?? `${c.ownerId.slice(0, 8)}…`;
 
   const clientName = (c: ContractResponse): string => {
-    const cnpj = c.owner?.cnpj ?? ownerById.get(c.ownerId)?.cnpj;
+    const cnpj = c.owner?.cnpj;
     return clients.find((cl) => clientOwnsCnpj(cl, cnpj))?.name ?? "—";
   };
 
@@ -308,7 +308,7 @@ export const ContractsPage = () => {
             title="Depositante"
             value={draft.ownerId}
             allLabel="Todos"
-            options={ownersList.map((o) => ({ value: o.id, label: o.legalName }))}
+            options={ownersList.map((o) => ({ value: o.id, label: `${o.internalCode} - ${o.legalName}` }))}
             onChange={(v) => set("ownerId", v)}
           />
         )}
