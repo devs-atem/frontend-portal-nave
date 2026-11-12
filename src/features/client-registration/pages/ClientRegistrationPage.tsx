@@ -6,6 +6,7 @@ import {
   Input,
   Modal,
   PageTitleCard,
+  Pagination,
   Skeleton,
   StatusTag,
   Table,
@@ -141,6 +142,9 @@ const ContractsTable = ({
   );
 };
 
+/** Itens por página (`limit` de `GET /rest/clients`). */
+const PAGE_SIZE = 10;
+
 export const ClientRegistrationPage = () => {
   const svc = useIoC("clientRegistration");
   const navigate = useNavigate();
@@ -148,6 +152,9 @@ export const ClientRegistrationPage = () => {
 
   // ─── Carregamento ──────────────────────────────────────────────────────────
   const [data, setData] = useState<ClientRecord[]>([]);
+  /** Página corrente (base 1) e total geral de clientes (da API paginada). */
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
   /** Primeira carga (skeleton de página inteira). */
   const [loading, setLoading] = useState(true);
   /** Recarga após uma mutação (skeleton dentro da tabela). */
@@ -158,9 +165,16 @@ export const ClientRegistrationPage = () => {
   useEffect(() => {
     let cancelled = false;
     svc
-      .list()
-      .then((rows) => {
-        if (!cancelled) setData(rows);
+      .listPage({ page, limit: PAGE_SIZE })
+      .then(({ rows, total: count }) => {
+        if (cancelled) return;
+        setData(rows);
+        setTotal(count);
+        // Página ficou fora do intervalo (ex.: removeu o último item): volta.
+        if (rows.length === 0 && count > 0 && page > 1) {
+          setReloading(true);
+          setPage(Math.max(1, Math.ceil(count / PAGE_SIZE)));
+        }
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -177,7 +191,7 @@ export const ClientRegistrationPage = () => {
     return () => {
       cancelled = true;
     };
-  }, [svc, reloadToken]);
+  }, [svc, page, reloadToken]);
 
   const reload = useCallback(() => {
     setReloading(true);
@@ -484,11 +498,25 @@ export const ClientRegistrationPage = () => {
         columns={columns}
         data={data}
         title="Clientes"
+        itemCount={total}
         actions={actions}
+        onRowClick={(c) => openEdit(c)}
         loading={reloading}
         skeletonRows={6}
         emptyMessage="Nenhum cliente cadastrado"
       />
+      {total > PAGE_SIZE && (
+        <Pagination
+          page={page}
+          totalPages={Math.max(1, Math.ceil(total / PAGE_SIZE))}
+          totalItems={total}
+          pageSize={PAGE_SIZE}
+          onPageChange={(p) => {
+            setReloading(true);
+            setPage(p);
+          }}
+        />
+      )}
 
       {/* Cadastro / edição */}
       <Modal open={open} onClose={closeForm} size="md">

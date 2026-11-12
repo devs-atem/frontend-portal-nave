@@ -38,6 +38,31 @@ describe("ClientRegistrationService", () => {
     });
   });
 
+  it("listPage() chama GET /clients paginado (e NÃO /clients/all)", async () => {
+    const get = vi.fn(async () => ({ rows: [apiClient()], total: 25 }));
+    const { rows, total } = await make({ get }).listPage({ page: 2, limit: 10 });
+
+    expect(get).toHaveBeenCalledTimes(1);
+    expect(get).toHaveBeenCalledWith(PRODUCTS_ENDPOINTS.clientsPaginated, {
+      page: 2,
+      limit: 10,
+    });
+    expect(total).toBe(25);
+    expect(rows[0]).toMatchObject({ id: ID, name: "Cliente Rio", bpid: "1001" });
+  });
+
+  it("listPage() aceita array puro e resposta vazia", async () => {
+    const arr = vi.fn(async () => [apiClient()]);
+    expect(await make({ get: arr }).listPage({ page: 1, limit: 10 })).toMatchObject({
+      total: 1,
+    });
+    const none = vi.fn(async () => undefined);
+    expect(await make({ get: none }).listPage({ page: 1, limit: 10 })).toEqual({
+      rows: [],
+      total: 0,
+    });
+  });
+
   it("list() retorna vazio quando a API responde sem corpo", async () => {
     const get = vi.fn(async () => undefined);
     expect(await make({ get }).list()).toEqual([]);

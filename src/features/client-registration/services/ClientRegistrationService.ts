@@ -7,6 +7,7 @@ import {
   type ClientContractSummary,
   type ClientResponse,
   type ClientsListResponse,
+  type ClientsPaginationResponse,
   type CreateClientRequest,
   type ProductsListResponse,
   type UpdateClientRequest,
@@ -67,7 +68,19 @@ export function toClientRecord(c: ClientResponse): ClientRecord {
 }
 
 /** Contrato do service de cadastro de clientes (API real ou mock). */
+/** Uma página de clientes + total geral (de todas as páginas). */
+export interface ClientsPage {
+  rows: ClientRecord[];
+  total: number;
+}
+
 export interface IClientRegistrationService {
+  /** Página de clientes (`GET /rest/clients?page&limit`) — usada na tela de cadastro. */
+  listPage(q: { page: number; limit: number }): Promise<ClientsPage>;
+  /**
+   * TODOS os clientes (`GET /rest/clients/all`, sem paginação). Só para
+   * seletores/lookups (ex.: filtros de Contratos) — NÃO usar em tabelas.
+   */
   list(): Promise<ClientRecord[]>;
   get(id: string, opts?: { withContracts?: boolean }): Promise<ClientRecord>;
   create(input: ClientRecordInput): Promise<ClientRecord>;
@@ -87,6 +100,17 @@ export interface IClientRegistrationService {
  */
 export class ClientRegistrationService implements IClientRegistrationService {
   constructor(private readonly http: IHttpService) {}
+
+  async listPage(q: { page: number; limit: number }): Promise<ClientsPage> {
+    const resp = await this.http.get<
+      ClientsPaginationResponse | ClientResponse[]
+    >(PRODUCTS_ENDPOINTS.clientsPaginated, { page: q.page, limit: q.limit });
+    const rows = Array.isArray(resp) ? resp : (resp?.rows ?? []);
+    const total = Array.isArray(resp)
+      ? resp.length
+      : (resp?.total ?? rows.length);
+    return { rows: rows.map(toClientRecord), total };
+  }
 
   async list(): Promise<ClientRecord[]> {
     const resp = await this.http.get<ClientsListResponse>(
