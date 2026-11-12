@@ -1,4 +1,5 @@
 import logoIcon from "@assets/brand/logo-icon.png";
+import TruckArt from "./TruckArt";
 import "./LoadingApp.css";
 
 /**
@@ -38,6 +39,11 @@ const LoadingApp = () => {
         aria-label="Carregamento em andamento"
       >
         <div className="nm-load__progress-bar" />
+      </div>
+
+      {/* Caminhão-tanque */}
+      <div className="nm-load__truck" aria-hidden="true">
+        <TruckArt />
       </div>
 
       {/* Onda do rodapé */}

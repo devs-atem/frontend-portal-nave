@@ -39,7 +39,7 @@ export const AdminPage = () => {
     { id: "perfil", label: "Perfil", accessor: "perfil" },
     { id: "clientes", label: "Clientes", accessor: "clientes" },
     { id: "ultimo", label: "Último acesso", accessor: (u) => fDH(u.ultimo) },
-    { id: "ativo", label: "Situação", accessor: (u) => <StatusTag label={u.ativo ? "Ativo" : "Inativo"} status={statusToTag(u.ativo ? "Ativo" : "Inativo")} size="sm" /> },
+    { id: "ativo", label: "Situação", accessor: (u) => (u.ativo ? "Ativo" : "Inativo"), render: (_v, u) => <StatusTag label={u.ativo ? "Ativo" : "Inativo"} status={statusToTag(u.ativo ? "Ativo" : "Inativo")} size="sm" /> },
   ];
 
   const produtoCols: TableColumn<Produto>[] = [

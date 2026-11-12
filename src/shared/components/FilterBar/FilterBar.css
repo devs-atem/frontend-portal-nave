@@ -1,0 +1,11 @@
+/* Barra de filtros padrão — layout horizontal em uma única linha. */
+.nm-filterbar {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 10px;
+  background: #ffffff;
+  border: 1px solid #e2e6ee;
+  border-radius: 12px;
+  padding: 14px 16px;
+}
