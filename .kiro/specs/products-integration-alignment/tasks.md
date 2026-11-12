@@ -119,7 +119,7 @@ graph TD
 
 ## Status da implementação (atualizado)
 
-**Concluídas:** 1, 2, 3, 3.1, 4, 4.1, 5, 7, 8, 9. Verificado com `tsc -b`, ESLint e `vitest` (77 testes passando na branch `feat/products-ui-integracao`; avisos `react-hooks`/`react-refresh` preexistentes).
+**Concluídas:** 1, 2, 3, 3.1, 4, 4.1, 5, 7, 8, 9. Verificado com `tsc -b`, ESLint e `vitest` (77 testes passando quando o PR de produtos, #5, foi revisado; avisos `react-hooks`/`react-refresh` preexistentes).
 
 **Não feitas / parciais**
 - **6. Permissão de escrita:** **não implementada, por decisão.** O back de produtos não aplica RBAC por rota; `products:write` só mudaria a UX e dependeria de cadastro no RBAC. Novo/Editar/Clientes/Excluir aparecem para quem acessa a tela. Reabrir se necessário. Cobre o requisito 7, que fica fora deste PR.

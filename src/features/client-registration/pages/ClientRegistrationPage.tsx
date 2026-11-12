@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
@@ -206,6 +206,8 @@ export const ClientRegistrationPage = () => {
   const [initialProductIds, setInitialProductIds] = useState<string[]>([]);
   const [productsState, setProductsState] = useState<ProductsLoadState>("idle");
   const [productSearch, setProductSearch] = useState("");
+  /** Id da última carga de produtos do formulário (descarta respostas antigas). */
+  const editRequest = useRef(0);
 
   // ─── Detalhe (leitura) ─────────────────────────────────────────────────────
   const [detail, setDetail] = useState<ClientRecord | null>(null);
@@ -233,6 +235,7 @@ export const ClientRegistrationPage = () => {
   };
 
   const openCreate = () => {
+    editRequest.current++; // invalida carga de produtos de uma edição anterior
     setEditing(null);
     setForm(EMPTY);
     setErrors({});
@@ -250,20 +253,31 @@ export const ClientRegistrationPage = () => {
 
     // Carrega os produtos vinculados (detalhe) e as opções do catálogo. Enquanto
     // não terminar, `productIds` não é enviado (evita sobrescrever com lista vazia).
+    // Só aplica a resposta se este ainda for o formulário aberto: sem isso,
+    // fechar e abrir outro cliente antes da resposta colocaria os produtos do
+    // cliente anterior no formulário novo, e o PATCH substituiria os vínculos
+    // do cliente certo pelos do errado.
+    const requestId = ++editRequest.current;
+    const isCurrent = () => editRequest.current === requestId;
     setProductsState("loading");
     Promise.all([svc.get(c.id), svc.listProductOptions()])
       .then(([full, options]) => {
+        if (!isCurrent()) return;
         const ids = (full.products ?? []).map((p) => p.id);
         setProductOptions(options);
         setProductIds(ids);
         setInitialProductIds(ids);
         setProductsState("ready");
       })
-      .catch(() => setProductsState("error"));
+      .catch(() => {
+        if (isCurrent()) setProductsState("error");
+      });
   };
 
   const closeForm = () => {
-    if (!saving) setOpen(false);
+    if (saving) return;
+    editRequest.current++; // descarta carga de produtos ainda pendente
+    setOpen(false);
   };
 
   const addBranch = () => {

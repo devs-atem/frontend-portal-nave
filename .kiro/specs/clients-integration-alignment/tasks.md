@@ -22,7 +22,7 @@ Atualiza a integração da tela de Cadastro de clientes com `docs/frontend-integ
   - Cobrir: envio sem máscara, filiais completas/`[]`, omissão e envio de `productIds`, `contractFields`, mapeamento de `contracts` ausente/`[]`, propagação de `AppError`.
   - _Requisitos: 10.5_
 
-- [ ] 3. **Mensagens de erro por status** — `src/features/client-registration/pages/`
+- [x] 3. **Mensagens de erro por status** — `src/features/client-registration/clientRules.ts`
   - Extrair `clientErrorMessage` (409 usa `message` da API; 400; 404; fallback) em módulo testável e substituir `errorMessage()` da página.
   - Teste unitário por status.
   - _Requisitos: 8.1, 8.2, 8.3, 8.4, 8.5_
@@ -103,15 +103,18 @@ graph TD
 
 ## Status da implementação (atualizado)
 
-**Concluídas:** 1, 2, 2.1, 5, 6, 7, 8. Verificado com `tsc`, ESLint, `vite build` e `vitest` (todos passando).
+**Concluídas:** 1, 2, 2.1, 3, 5, 6, 7, 8. Verificado com `tsc -b`, ESLint e `vitest` (todos passando).
 
 **Parciais / não feitas**
-- **3. Mensagens de erro:** parcial. A lógica (409 usa a `message` da API; 400 de CNPJ; 404) está em `errorMessage()` dentro de `ClientRegistrationPage.tsx`. Não foi extraída para módulo próprio e não tem teste unitário.
 - **4. Permissão de escrita:** **não implementada, por decisão.** O back de clientes não aplica RBAC por rota, então `client_registry:write` só mudaria a UX e exigiria cadastro no console RBAC. Os botões Novo/Editar/Remover continuam visíveis a quem acessa a tela (`client_registry:read`). Reabrir se o RBAC passar a ser exigido.
 - **9. Verificação:** parcial. Falta o smoke test no navegador/dev server contra a API real.
 
 **Divergências em relação ao design**
-- O modal de edição **não usa abas**: Dados, Filiais e Produtos ficam na mesma tela. A seção de produtos só aparece na edição (a API não aceita `productIds` na criação) e só envia `productIds` se o detalhe foi carregado e a seleção mudou.
+- **3. Mensagens de erro:** a função se chama `errorMessage` (não `clientErrorMessage`) e fica em `src/features/client-registration/clientRules.ts`, junto com `sameSet`, `buildProductIdsPatch` e `errorStatus`. Coberta por `clientRules.test.ts` (409 com e sem `message`, 400 com CNPJ, 400 genérico, 404, `statusCode`, fallback).
+- O modal de edição **não usa abas**: Dados, Filiais e Produtos ficam na mesma tela. A seção de produtos só aparece na edição (a API não aceita `productIds` na criação) e só envia `productIds` se o detalhe foi carregado e a seleção mudou (`buildProductIdsPatch`).
+- No salvamento, um 404 mantém o formulário aberto; ele só fecha (e recarrega a lista) se `svc.get` confirmar que o cliente não existe mais.
+- Respostas antigas da carga de produtos do formulário são descartadas (contador `editRequest`), para que fechar e abrir outro cliente não misture os vínculos.
+- `update` exige `currentBranches` (a API substitui todas as filiais; omitir apagaria as existentes).
 - O botão "Ver contratos" no detalhe aponta para `/contratos?clientId=<uuid>` (implementado na spec `contracts-integration`) e só aparece com `portal_nave:contracts:read`.
-- A rota paginada `GET /rest/clients?page&limit` não é usada (a tabela consome `/clients/all`).
-- `ClientRegistrationService.test.ts`: o helper `make` passou a aceitar `Record<string, unknown>`, o que eliminou erros de tipagem preexistentes.
+- A tabela consome a rota paginada `GET /rest/clients?page&limit` (`listPage`); `/clients/all` (`list`) fica só para seletores.
+- `ClientRegistrationService.test.ts`: o helper `make` recebe um mock parcial tipado (`HttpMock`), com um único cast comentado.

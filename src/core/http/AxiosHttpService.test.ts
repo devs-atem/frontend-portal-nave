@@ -94,3 +94,27 @@ describe("AxiosHttpService.get (deduplicação)", () => {
     expect(request).toHaveBeenCalledTimes(2);
   });
 });
+
+describe("AxiosHttpService.get (403)", () => {
+  beforeEach(() => {
+    request.mockReset();
+    window.location.hash = "";
+  });
+
+  it("redireciona para /access-denied e libera a chave: um novo GET vai à rede", async () => {
+    request
+      .mockRejectedValueOnce({ response: { status: 403, data: {} } })
+      .mockResolvedValueOnce({ data: ["ok"] });
+    const http = new AxiosHttpService();
+
+    // O 403 devolve uma promise que nunca resolve (a navegação assume).
+    void http.get("/rest/products", { page: 1 });
+    await vi.waitFor(() =>
+      expect(window.location.hash).toBe("#/access-denied?reason=forbidden"),
+    );
+
+    // Voltar à listagem na mesma sessão não pode herdar a promise pendente.
+    await expect(http.get("/rest/products", { page: 1 })).resolves.toEqual(["ok"]);
+    expect(request).toHaveBeenCalledTimes(2);
+  });
+});
