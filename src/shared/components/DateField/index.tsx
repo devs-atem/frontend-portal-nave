@@ -59,6 +59,7 @@ export const DateField = ({
     ]
       .filter(Boolean)
       .join(" ")}
+    role="group"
     aria-label={ariaLabel}
     aria-invalid={error || undefined}
     aria-disabled={disabled || undefined}

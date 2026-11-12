@@ -5,11 +5,12 @@ import AppError from "@shared/utils/appError";
 
 import { CONTRACTS_ENDPOINTS } from "./contract";
 import { contractErrorMessage, isStaleStateError } from "./contractErrors";
-import { ContractsService } from "./ContractsService";
+import { ContractsService, fetchAllPages } from "./ContractsService";
 import { OwnersService } from "./OwnersService";
 import { ReferenceService } from "./ReferenceService";
 
-const mk = (http: Record<string, unknown>) => http as unknown as IHttpService;
+// Mock parcial: só os métodos usados pelos testes; o cast único é intencional.
+const mk = (http: Partial<IHttpService>) => http as IHttpService;
 const err = (status: number, msg = "x") => new AppError(msg, "error", "AppError", status);
 
 describe("ContractsService", () => {
@@ -203,5 +204,13 @@ describe("contractErrorMessage", () => {
     expect(isStaleStateError(err(400, "Invalid contract transition: ACTIVE -> DRAFT"))).toBe(true);
     expect(isStaleStateError(err(400, "Only DRAFT contracts can be edited"))).toBe(true);
     expect(isStaleStateError(err(400, "outra"))).toBe(false);
+  });
+});
+
+describe("fetchAllPages", () => {
+  it("lança erro ao atingir o limite de páginas com dados restantes", async () => {
+    const get = vi.fn(async () => ({ rows: [{ id: 1 }], total: 9999 }));
+    await expect(fetchAllPages(mk({ get } as Partial<IHttpService>), "/rest/contracts")).rejects.toThrow(/Limite de 20/);
+    expect(get).toHaveBeenCalledTimes(20);
   });
 });

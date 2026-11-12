@@ -41,9 +41,7 @@ export class OwnersService implements IOwnersService {
   constructor(private readonly http: IHttpService) {}
 
   async listOptions(): Promise<OwnerOption[]> {
-    console.log(`[Owners] GET ${CONTRACTS_ENDPOINTS.ownersAll} (select de depositantes)`);
     const resp = await this.http.get<OwnerOption[]>(CONTRACTS_ENDPOINTS.ownersAll);
-    console.log("[Owners] resposta:", resp);
     return Array.isArray(resp) ? resp : [];
   }
 

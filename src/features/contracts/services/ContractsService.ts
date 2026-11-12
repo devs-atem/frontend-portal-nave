@@ -46,9 +46,9 @@ export async function fetchAllPages<T>(
       await http.get<Paginated<T> | T[]>(path, { ...query, page, limit: MAX_LIMIT }),
     );
     all.push(...resp.rows);
-    if (all.length >= resp.total || resp.rows.length === 0) break;
+    if (all.length >= resp.total || resp.rows.length === 0) return all;
   }
-  return all;
+  throw new Error(`Limite de ${maxPages} páginas atingido em ${path}; resultado incompleto.`);
 }
 
 export interface IContractsService {
