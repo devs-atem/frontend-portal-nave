@@ -4,8 +4,7 @@ import { generatePermissionMatcher } from "@shared/utils";
 import { AdminPage } from "@features/admin/pages/AdminPage";
 import { ClientRegistrationPage } from "@features/client-registration/pages/ClientRegistrationPage";
 import type { IClientRegistrationService } from "@features/client-registration/services/ClientRegistrationService";
-import { MockClientRegistrationService } from "@features/client-registration/services/MockClientRegistrationService";
-// import { ClientRegistrationService } from "@features/client-registration/services/ClientRegistrationService";
+import { ClientRegistrationService } from "@features/client-registration/services/ClientRegistrationService";
 
 /**
  * Módulo pai "Administrador".
@@ -69,12 +68,8 @@ const administradorModule: Module = {
       },
     ],
   },
-  // TEMPORÁRIO: mock enquanto a API /rest/clients está instável no mw-nave-dev.
-  // Para voltar à API real: descomentar o import de `ClientRegistrationService`
-  // e a linha abaixo, e remover o mock.
-  // services: (c) =>
-  //   c.add({ clientRegistration: new ClientRegistrationService(c.get("http")) }),
-  services: (c) => c.add({ clientRegistration: new MockClientRegistrationService() }),
+  services: (c) =>
+    c.add({ clientRegistration: new ClientRegistrationService(c.get("http")) }),
 };
 
 export default administradorModule;

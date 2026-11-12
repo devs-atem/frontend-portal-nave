@@ -48,6 +48,13 @@ export default class AxiosHttpService implements IHttpService {
     params?: unknown,
     responseType?: string,
     signal?: AbortSignal,
+    /**
+     * Chamado quando a requisição termina sem resolver nem rejeitar (403 →
+     * promise pendente para sempre). O `get` usa isso para liberar a chave de
+     * deduplicação; sem isso, GETs idênticos posteriores herdariam a promise
+     * pendente e a tela ficaria carregando até recarregar a página.
+     */
+    onSettledWithoutResult?: () => void,
   ): Promise<T> {
     try {
       const { data } = await this.http.request<T>({
@@ -69,6 +76,7 @@ export default class AxiosHttpService implements IHttpService {
         if (!window.location.hash.startsWith(`#${ACCESS_DENIED_PATH}`)) {
           window.location.hash = target;
         }
+        onSettledWithoutResult?.();
         return new Promise<never>(() => {});
       }
 
@@ -98,11 +106,11 @@ export default class AxiosHttpService implements IHttpService {
     const pending = this.inFlightGets.get(key);
     if (pending) return pending as Promise<T>;
 
-    const promise = this.request<T>("GET", path, undefined, params).finally(
-      () => {
-        this.inFlightGets.delete(key);
-      },
-    );
+    const release = () => {
+      if (this.inFlightGets.get(key) === promise) this.inFlightGets.delete(key);
+    };
+    const promise = this.request<T>("GET", path, undefined, params, undefined, undefined, release)
+      .finally(release);
     this.inFlightGets.set(key, promise);
     return promise;
   }
