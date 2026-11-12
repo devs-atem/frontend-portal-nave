@@ -1,0 +1,43 @@
+/* Campo de data no padrão do DS (CalendarRange single). */
+.nm-date-field {
+  width: 100%;
+  position: relative;
+}
+
+/*
+ * Alinha o campo aos demais inputs do formulário (Input size="sm" → 44px):
+ * altura fixa, sem padding vertical extra e texto centralizado verticalmente.
+ * Sem isso o input interno herdava a altura "md" e o texto ficava no topo.
+ */
+.nm-date-field .atem-calendar-range__trigger {
+  box-sizing: border-box;
+  height: var(--atem-component-control-height-md, 44px);
+  min-height: 0;
+  padding: 0 var(--atem-spacing-3, 12px);
+  gap: var(--atem-spacing-2, 8px);
+}
+
+.nm-date-field .atem-calendar-range__trigger .atem-input__wrapper {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+}
+
+.nm-date-field .atem-calendar-range__trigger .atem-input {
+  height: 100%;
+  font-size: var(--atem-typography-fontSize-sm, 14px);
+  line-height: normal;
+  padding: 0 var(--atem-spacing-1, 4px);
+}
+
+/* Inválido: mesma cor de erro usada nos demais campos do formulário. */
+.nm-date-field--error .atem-calendar-range__trigger {
+  border-color: #b42f2f;
+}
+
+/* Desabilitado: bloqueia a interação e esmaece como os inputs desabilitados. */
+.nm-date-field--disabled {
+  pointer-events: none;
+  opacity: 0.6;
+}
