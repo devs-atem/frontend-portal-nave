@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, type Mock } from "vitest";
 
 import type { IHttpService } from "@core/http/models/IHttpService";
 import AppError from "@shared/utils/appError";
@@ -10,7 +10,8 @@ import { OwnersService } from "./OwnersService";
 import { ReferenceService } from "./ReferenceService";
 
 // Mock parcial: só os métodos usados pelos testes; o cast único é intencional.
-const mk = (http: Partial<IHttpService>) => http as IHttpService;
+type HttpMock = { [K in keyof IHttpService]?: Mock };
+const mk = (http: HttpMock) => http as unknown as IHttpService;
 const err = (status: number, msg = "x") => new AppError(msg, "error", "AppError", status);
 
 describe("ContractsService", () => {
@@ -210,7 +211,7 @@ describe("contractErrorMessage", () => {
 describe("fetchAllPages", () => {
   it("lança erro ao atingir o limite de páginas com dados restantes", async () => {
     const get = vi.fn(async () => ({ rows: [{ id: 1 }], total: 9999 }));
-    await expect(fetchAllPages(mk({ get } as Partial<IHttpService>), "/rest/contracts")).rejects.toThrow(/Limite de 20/);
+    await expect(fetchAllPages(mk({ get }), "/rest/contracts")).rejects.toThrow(/Limite de 20/);
     expect(get).toHaveBeenCalledTimes(20);
   });
 });

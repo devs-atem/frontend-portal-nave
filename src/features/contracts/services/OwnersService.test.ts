@@ -1,12 +1,13 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, type Mock } from "vitest";
 
 import type { IHttpService } from "@core/http/models/IHttpService";
 
 import { CONTRACTS_ENDPOINTS } from "./contract";
 import { OwnersService } from "./OwnersService";
 
-const make = (http: Record<string, unknown>) =>
-  new OwnersService(http as unknown as IHttpService);
+// Mock parcial: só os métodos usados; cast único e intencional.
+type HttpMock = { [K in keyof IHttpService]?: Mock };
+const make = (http: HttpMock) => new OwnersService(http as unknown as IHttpService);
 
 describe("OwnersService.listOptions", () => {
   it("chama GET /rest/owners/all sem parâmetros e devolve o array direto", async () => {
