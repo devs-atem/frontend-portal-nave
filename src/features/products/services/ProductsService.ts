@@ -1,20 +1,15 @@
 /**
- * Produto do catálogo (dados mestres, fixos).
- * Shape reduzido ao essencial para o portal: identificação + grupo + cor.
+ * Produto do catálogo (dados mestres).
+ * Reflete o que a API expõe (id, nome e código SAP); a cor é apenas visual.
  */
 export interface CatalogProduct {
   id: string;
   /** Nome completo (ex.: "ÓLEO DIESEL A S10"). */
   name: string;
-  /** Sigla/abreviação (ex.: "AS-10"). */
-  abbreviation: string;
-  /** Código SAP. */
+  /** Código SAP (único). */
   sapCode: string;
-  /** Cor representativa (hex). */
+  /** Cor representativa (hex), derivada do id. */
   color: string;
-  /** Grupo do produto (ex.: "Diesel"). */
-  group: string;
-  active: boolean;
 }
 
 /** Vínculo N:N entre produto e cliente. */

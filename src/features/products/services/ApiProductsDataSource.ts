@@ -6,60 +6,76 @@ import {
   formatCnpj,
   type ClientResponse,
   type ClientsListResponse,
+  type CreateProductRequest,
   type ProductResponse,
   type ProductsListResponse,
+  type UpdateProductRequest,
 } from "./contract";
-import type { ProductsDataSource } from "./ProductsDataSource";
+import type {
+  NewProductInput,
+  ProductChanges,
+  ProductsDataSource,
+} from "./ProductsDataSource";
 import type { CatalogProduct, ProductClientLink } from "./ProductsService";
+
+/** Máximo de requisições de detalhe simultâneas durante o `load()`. */
+export const DETAIL_CONCURRENCY = 6;
+
+/** Executa as tarefas com no máximo `limit` em paralelo, preservando a ordem. */
+async function runLimited<T>(
+  tasks: (() => Promise<T>)[],
+  limit: number,
+): Promise<T[]> {
+  const results: T[] = new Array<T>(tasks.length);
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    while (next < tasks.length) {
+      const i = next++;
+      results[i] = await tasks[i]();
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(limit, tasks.length) }, () => worker()),
+  );
+  return results;
+}
 
 /**
  * Implementação da `ProductsDataSource` que consome a Products_API via HTTP.
  *
- * Hidrata um snapshot em memória a partir de `GET /rest/products/all` e
- * `GET /rest/clients/all` (listagens sem relações aninhadas) e de
- * `GET /rest/products/:id` para cada produto (detalhe com clientes vinculados),
- * mapeando o contrato (`ProductResponse`/`ClientResponse`) para os modelos do
- * front-end (`CatalogProduct`/`Cliente`). Os acessores síncronos leem desse
- * snapshot, preservando exatamente as assinaturas que a página já usa.
+ * Hidrata um snapshot a partir de `GET /rest/products/all` e
+ * `GET /rest/clients/all` (listagens sem relações). Como a relação N:N é
+ * simétrica, busca o detalhe só do lado com MENOS registros
+ * (`GET /products/:id` ou `GET /clients/:id`), com concorrência limitada, e
+ * deriva todos os vínculos dele. Qualquer falha de detalhe rejeita o `load()`
+ * (sem snapshot parcial).
  *
  * Reconciliação de identificadores: o `Cliente.id` do front-end é `number`,
- * enquanto o contrato usa UUID (string). Cada UUID distinto recebe um id
- * numérico substituto estável, por ordem de inserção, mantido em mapas
- * bidirecionais internos à data source — a página continua tratando `Cliente.id`
- * como uma chave numérica opaca.
+ * enquanto o contrato usa UUID. Cada UUID recebe um id numérico substituto
+ * estável; toda escrita converte de volta com `clientUuidOf`.
  */
 export class ApiProductsDataSource implements ProductsDataSource {
   private _products: CatalogProduct[] = [];
   private _clients: Cliente[] = [];
   private _links: ProductClientLink[] = [];
 
-  /** UUID do cliente → id numérico substituto. */
   private readonly uuidToSurrogate = new Map<string, number>();
-  /** Id numérico substituto → UUID do cliente (inverso). */
   private readonly surrogateToUuid = new Map<number, string>();
-  /** Próximo id substituto a ser atribuído (por ordem de inserção). */
   private nextSurrogate = 1;
 
-  /** Indica se o snapshot já foi carregado (idempotência de `load()`). */
   private loaded = false;
 
   constructor(private readonly http: IHttpService) {}
 
-  /** Catálogo de produtos carregado (snapshot). */
   get products(): CatalogProduct[] {
     return this._products;
   }
 
-  /** Lista de clientes carregada (snapshot). */
   get clients(): Cliente[] {
     return this._clients;
   }
 
-  /**
-   * Hidrata o snapshot a partir da Products_API. Idempotente: uma segunda
-   * chamada é um no-op e não refaz as requisições HTTP. Erros da camada HTTP
-   * (`AppError`) são propagados para a fronteira de fetch da página.
-   */
+  /** Hidrata o snapshot. Idempotente. */
   async load(): Promise<void> {
     if (this.loaded) return;
 
@@ -67,64 +83,106 @@ export class ApiProductsDataSource implements ProductsDataSource {
       this.http.get<ProductsListResponse>(PRODUCTS_ENDPOINTS.products),
       this.http.get<ClientsListResponse>(PRODUCTS_ENDPOINTS.clients),
     ]);
-
-    const listedProducts = productsResp ?? [];
+    const products = productsResp ?? [];
     const clients = clientsResp ?? [];
 
-    // As listagens (`/all`) NÃO trazem as relações aninhadas: os clientes de
-    // cada produto só vêm em `GET /products/:id`. Busca o detalhe de cada
-    // produto para obter os vínculos.
-    const products = await Promise.all(
-      listedProducts.map((p) =>
-        this.http.get<ProductResponse>(PRODUCTS_ENDPOINTS.productById(p.id)),
-      ),
-    );
-
-    // 1) Reconciliação de ids: semeia os substitutos a partir da ordem do
-    //    endpoint de clientes...
-    for (const client of clients) {
-      this.surrogateFor(client.id);
-    }
-    // ...e também a partir de quaisquer clientes que apareçam apenas aninhados
-    //    sob os produtos, para que todo cliente referenciado seja mapeado.
-    for (const product of products) {
-      for (const client of product.clients ?? []) {
-        this.surrogateFor(client.id);
+    // Pares (productId, clientUuid) vindos do lado com menos registros.
+    const pairs: [string, string][] = [];
+    if (products.length <= clients.length) {
+      const details = await runLimited(
+        products.map(
+          (p) => () =>
+            this.http.get<ProductResponse>(PRODUCTS_ENDPOINTS.productById(p.id)),
+        ),
+        DETAIL_CONCURRENCY,
+      );
+      for (const d of details) {
+        for (const c of d.clients ?? []) pairs.push([d.id, c.id]);
+      }
+    } else {
+      const details = await runLimited(
+        clients.map(
+          (c) => () =>
+            this.http.get<ClientResponse>(PRODUCTS_ENDPOINTS.clientById(c.id)),
+        ),
+        DETAIL_CONCURRENCY,
+      );
+      for (const d of details) {
+        for (const p of d.products ?? []) pairs.push([p.id, d.id]);
       }
     }
 
-    // 2) Mapeia produtos e clientes para os modelos do front-end.
+    // Ids substitutos: primeiro pela ordem dos clientes, depois por clientes
+    // que apareçam apenas nos vínculos.
+    for (const c of clients) this.surrogateFor(c.id);
+    for (const [, clientUuid] of pairs) this.surrogateFor(clientUuid);
+
     this._products = products.map(toCatalogProduct);
     this._clients = clients.map((c) => this.toCliente(c));
 
-    // 3) Constrói os vínculos N:N a partir de AMBAS as direções das relações
-    //    aninhadas, de-duplicando (mesmo productId+clientId uma única vez).
     const seen = new Set<string>();
     const links: ProductClientLink[] = [];
-    const addLink = (productId: string, clientUuid: string): void => {
+    for (const [productId, clientUuid] of pairs) {
       const clientId = this.surrogateFor(clientUuid);
       const key = `${productId}\u0000${clientId}`;
-      if (seen.has(key)) return;
+      if (seen.has(key)) continue;
       seen.add(key);
       links.push({ productId, clientId });
-    };
-
-    for (const product of products) {
-      for (const client of product.clients ?? []) {
-        addLink(product.id, client.id);
-      }
-    }
-    for (const client of clients) {
-      for (const product of client.products ?? []) {
-        addLink(product.id, client.id);
-      }
     }
 
     this._links = links;
     this.loaded = true;
   }
 
-  /** Clientes vinculados a um produto. */
+  /** Descarta o snapshot e recarrega da API. */
+  async refresh(): Promise<void> {
+    this.loaded = false;
+    await this.load();
+  }
+
+  // ─── Escrita ───────────────────────────────────────────────────────────────
+
+  async createProduct(input: NewProductInput): Promise<CatalogProduct> {
+    const body: CreateProductRequest = {
+      name: input.name,
+      sapCode: input.sapCode,
+    };
+    const created = await this.http.post<ProductResponse>(
+      PRODUCTS_ENDPOINTS.productsRoot,
+      body,
+    );
+    return toCatalogProduct(created);
+  }
+
+  /** Só envia as chaves definidas; `clientIds` é substituição total. */
+  async updateProduct(
+    id: string,
+    changes: ProductChanges,
+  ): Promise<CatalogProduct> {
+    const body: UpdateProductRequest = {
+      ...(changes.name !== undefined ? { name: changes.name } : {}),
+      ...(changes.sapCode !== undefined ? { sapCode: changes.sapCode } : {}),
+      ...(changes.clientUuids !== undefined
+        ? { clientIds: changes.clientUuids }
+        : {}),
+    };
+    const updated = await this.http.patch<ProductResponse>(
+      PRODUCTS_ENDPOINTS.productById(id),
+      body,
+    );
+    return toCatalogProduct(updated);
+  }
+
+  async deleteProduct(id: string): Promise<void> {
+    await this.http.delete(PRODUCTS_ENDPOINTS.productById(id));
+  }
+
+  clientUuidOf(clientId: number): string | undefined {
+    return this.surrogateToUuid.get(clientId);
+  }
+
+  // ─── Acessores síncronos ───────────────────────────────────────────────────
+
   clientsOfProduct(productId: string): Cliente[] {
     return this._links
       .filter((v) => v.productId === productId)
@@ -132,7 +190,6 @@ export class ApiProductsDataSource implements ProductsDataSource {
       .filter((c): c is Cliente => !!c);
   }
 
-  /** Produtos vinculados a um cliente. */
   productsOfClient(clientId: number): CatalogProduct[] {
     return this._links
       .filter((v) => v.clientId === clientId)
@@ -140,12 +197,10 @@ export class ApiProductsDataSource implements ProductsDataSource {
       .filter((p): p is CatalogProduct => !!p);
   }
 
-  /** Quantos clientes um produto atende. */
   clientCountOfProduct(productId: string): number {
     return this._links.filter((v) => v.productId === productId).length;
   }
 
-  /** Quantos produtos um cliente possui. */
   productCountOfClient(clientId: number): number {
     return this._links.filter((v) => v.clientId === clientId).length;
   }
@@ -160,11 +215,6 @@ export class ApiProductsDataSource implements ProductsDataSource {
     return this._clients.find((c) => c.id === id);
   }
 
-  /**
-   * Retorna o id numérico substituto estável para um UUID de cliente,
-   * atribuindo um novo (por ordem de inserção) na primeira vez que o UUID é
-   * visto.
-   */
   private surrogateFor(uuid: string): number {
     const existing = this.uuidToSurrogate.get(uuid);
     if (existing !== undefined) return existing;
@@ -204,20 +254,12 @@ function colorFor(id: string): string {
   return PRODUCT_PALETTE[Math.abs(hash) % PRODUCT_PALETTE.length];
 }
 
-/**
- * Mapeia a resposta de produto do contrato para o modelo do front-end.
- *
- * A API hoje só expõe `id`, `name` e `sapCode`. Sigla, grupo e status ainda não
- * existem no back-end: ficam vazios / ativo por padrão até o contrato evoluir.
- */
+/** Mapeia a resposta de produto do contrato (id, name, sapCode) para o front-end. */
 function toCatalogProduct(p: ProductResponse): CatalogProduct {
   return {
     id: p.id,
     name: p.name,
-    abbreviation: "",
     sapCode: p.sapCode,
     color: colorFor(p.id),
-    group: "",
-    active: true,
   };
 }

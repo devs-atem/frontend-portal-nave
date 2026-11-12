@@ -110,7 +110,7 @@ function makeHttp(
 
 describe("ApiProductsDataSource", () => {
   describe("mapeamento de campos", () => {
-    it("mapeia id/name/sapCode e aplica defaults aos campos ausentes na API", async () => {
+    it("mapeia id/name/sapCode sem inventar campos que a API não tem", async () => {
       const { http } = makeHttp();
       const ds = new ApiProductsDataSource(http);
       await ds.load();
@@ -120,10 +120,10 @@ describe("ApiProductsDataSource", () => {
         id: P_DIESEL,
         name: "ÓLEO DIESEL A S10",
         sapCode: "10460",
-        abbreviation: "",
-        group: "",
-        active: true,
       });
+      expect(diesel).not.toHaveProperty("abbreviation");
+      expect(diesel).not.toHaveProperty("group");
+      expect(diesel).not.toHaveProperty("active");
       expect(diesel?.color).toMatch(/^#[0-9A-F]{6}$/i);
     });
 
@@ -250,6 +250,147 @@ describe("ApiProductsDataSource", () => {
       expect(get).toHaveBeenCalledWith("/rest/clients/all");
       expect(get).toHaveBeenCalledWith(`/rest/products/${P_DIESEL}`);
       expect(get).toHaveBeenCalledWith(`/rest/products/${P_GASOLINA}`);
+    });
+  });
+
+  describe("carga pelo lado menor", () => {
+    it("com mais produtos que clientes, busca o detalhe dos clientes", async () => {
+      const responses = makeResponses();
+      // 3 produtos > 2 clientes
+      responses.clients = responses.clients.slice(0, 2);
+      responses.products.push({
+        ...nestedProduct(P_ORPHAN, "ETANOL", "10200"),
+        clients: [],
+      });
+      // Detalhe dos clientes: Rio tem Diesel; Amazonas nenhum.
+      const details: Record<string, ClientResponse> = {
+        [C_RIO]: { ...responses.clients[0], products: [DIESEL] },
+        [C_AMAZONAS]: { ...responses.clients[1], products: [] },
+      };
+      const get = vi.fn(async (path: string) => {
+        if (path === PRODUCTS_ENDPOINTS.products) return responses.products;
+        if (path === PRODUCTS_ENDPOINTS.clients) return responses.clients;
+        const id = Object.keys(details).find(
+          (k) => path === PRODUCTS_ENDPOINTS.clientById(k),
+        );
+        if (id) return details[id];
+        throw new Error(`path inesperado: ${path}`);
+      });
+      const ds = new ApiProductsDataSource({ get } as unknown as IHttpService);
+      await ds.load();
+
+      expect(get).toHaveBeenCalledWith(PRODUCTS_ENDPOINTS.clientById(C_RIO));
+      expect(get).not.toHaveBeenCalledWith(PRODUCTS_ENDPOINTS.productById(P_DIESEL));
+      expect(ds.clientsOfProduct(P_DIESEL).map((c) => c.codigo)).toEqual(["100245"]);
+      expect(ds.clientCountOfProduct(P_ORPHAN)).toBe(0);
+    });
+
+    it("limita a concorrência das requisições de detalhe", async () => {
+      const total = 20;
+      const products = Array.from({ length: total }, (_, i) =>
+        nestedProduct(`p-${i}`, `P${i}`, `${i}`),
+      );
+      const clients: ClientResponse[] = Array.from({ length: total + 1 }, (_, i) => ({
+        ...nestedClient(`c-${i}`, `C${i}`, `${i}`, "12345678000190"),
+        updatedAt: TS,
+      }));
+      let inFlight = 0;
+      let maxInFlight = 0;
+      const get = vi.fn(async (path: string) => {
+        if (path === PRODUCTS_ENDPOINTS.products) return products;
+        if (path === PRODUCTS_ENDPOINTS.clients) return clients;
+        inFlight++;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        await new Promise((r) => setTimeout(r, 5));
+        inFlight--;
+        return { ...products.find((p) => path.endsWith(p.id))!, clients: [] };
+      });
+      const ds = new ApiProductsDataSource({ get } as unknown as IHttpService);
+      await ds.load();
+      expect(maxInFlight).toBeLessThanOrEqual(6);
+      expect(maxInFlight).toBeGreaterThan(1);
+    });
+
+    it("rejeita sem snapshot parcial quando um detalhe falha", async () => {
+      const responses = makeResponses();
+      const get = vi.fn(async (path: string) => {
+        if (path === PRODUCTS_ENDPOINTS.products) return responses.products;
+        if (path === PRODUCTS_ENDPOINTS.clients) return responses.clients;
+        if (path === PRODUCTS_ENDPOINTS.productById(P_GASOLINA)) {
+          throw new AppError("Falha", "error", "AppError", 500);
+        }
+        return responses.products[0];
+      });
+      const ds = new ApiProductsDataSource({ get } as unknown as IHttpService);
+      await expect(ds.load()).rejects.toBeInstanceOf(AppError);
+      expect(ds.products).toEqual([]);
+    });
+  });
+
+  describe("refresh()", () => {
+    it("refaz as requisições e atualiza o snapshot", async () => {
+      const { http, get } = makeHttp();
+      const ds = new ApiProductsDataSource(http);
+      await ds.load();
+      const calls = get.mock.calls.length;
+      await ds.refresh();
+      expect(get.mock.calls.length).toBe(calls * 2);
+    });
+  });
+
+  describe("escrita", () => {
+    const setup = () => {
+      const post = vi.fn(async () => ({ ...DIESEL }));
+      const patch = vi.fn(async () => ({ ...DIESEL }));
+      const del = vi.fn(async () => ({ success: true }));
+      const { http } = makeHttp();
+      const full = Object.assign(http, { post, patch, delete: del }) as IHttpService;
+      return { ds: new ApiProductsDataSource(full), post, patch, del };
+    };
+
+    it("createProduct envia somente name e sapCode", async () => {
+      const { ds, post } = setup();
+      await ds.createProduct({ name: "Diesel", sapCode: "123" });
+      expect(post).toHaveBeenCalledWith(PRODUCTS_ENDPOINTS.productsRoot, {
+        name: "Diesel",
+        sapCode: "123",
+      });
+    });
+
+    it("updateProduct envia só as chaves definidas", async () => {
+      const { ds, patch } = setup();
+      await ds.updateProduct(P_DIESEL, { name: "Novo" });
+      expect(patch).toHaveBeenCalledWith(PRODUCTS_ENDPOINTS.productById(P_DIESEL), {
+        name: "Novo",
+      });
+    });
+
+    it("updateProduct envia clientIds completos e [] para desvincular todos", async () => {
+      const { ds, patch } = setup();
+      await ds.updateProduct(P_DIESEL, { clientUuids: [C_RIO, C_SOLIMOES] });
+      await ds.updateProduct(P_DIESEL, { clientUuids: [] });
+      expect(patch).toHaveBeenNthCalledWith(1, PRODUCTS_ENDPOINTS.productById(P_DIESEL), {
+        clientIds: [C_RIO, C_SOLIMOES],
+      });
+      expect(patch).toHaveBeenNthCalledWith(2, PRODUCTS_ENDPOINTS.productById(P_DIESEL), {
+        clientIds: [],
+      });
+    });
+
+    it("clientUuidOf traduz o id substituto para o UUID real", async () => {
+      const { ds } = setup();
+      await ds.load();
+      const rio = ds.clients.find((c) => c.codigo === "100245")!;
+      expect(ds.clientUuidOf(rio.id)).toBe(C_RIO);
+      expect(ds.clientUuidOf(9999)).toBeUndefined();
+    });
+
+    it("deleteProduct chama DELETE e propaga o erro 500", async () => {
+      const { ds, del } = setup();
+      await ds.deleteProduct(P_DIESEL);
+      expect(del).toHaveBeenCalledWith(PRODUCTS_ENDPOINTS.productById(P_DIESEL));
+      del.mockRejectedValueOnce(new AppError("Erro", "error", "AppError", 500));
+      await expect(ds.deleteProduct(P_DIESEL)).rejects.toMatchObject({ status: 500 });
     });
   });
 

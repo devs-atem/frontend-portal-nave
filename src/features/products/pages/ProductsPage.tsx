@@ -6,19 +6,21 @@ import {
   CustomTabs,
   Input,
   PageTitleCard,
-  Select,
   Skeleton,
-  StatusTag,
   Table,
   type TableColumn,
 } from "@devs-atem/design-system";
 
 import { useIoC } from "@shared/hooks/useIoC";
 import type { CatalogProduct } from "../services/ProductsService";
+import {
+  DeleteProductDialog,
+  ProductClientsDialog,
+  ProductFormDialog,
+} from "./ProductDialogs";
 import "./ProductsPage.css";
 
 type View = "product" | "client";
-type StatusFilter = "all" | "active" | "inactive";
 
 /**
  * Linha unificada das tabelas expansíveis.
@@ -28,46 +30,32 @@ type StatusFilter = "all" | "active" | "inactive";
 interface Row {
   key: string;
   kind: "product" | "client";
+  /** Id do produto (kind "product") para as ações de escrita. */
+  productId?: string;
   color?: string;
   title: string;
+  /** CNPJ (clientes). Vazio para produtos. */
   sub: string;
+  /** Código SAP (produtos) ou BP (clientes). */
   code: string;
-  group: string;
-  active?: boolean;
   links: number;
   children?: Row[];
 }
 
-const STATUS_OPTS: StatusFilter[] = ["all", "active", "inactive"];
-const STATUS_LABEL: Record<StatusFilter, string> = {
-  all: "Todos os status",
-  active: "Somente ativos",
-  inactive: "Somente inativos",
-};
-
-/**
- * Mapeia o grupo do produto para um "tom" de tag. Os tons são estáveis por
- * família de combustível; qualquer grupo não mapeado cai no tom neutro (azul
- * da paleta Navemazônia). As cores reais vivem no CSS (`.nm-prod__tag--*`),
- * todas derivadas da paleta do projeto.
- */
-const groupTone = (group: string): string => {
-  const g = group.toLowerCase();
-  if (g.includes("biodiesel")) return "biodiesel";
-  if (g.includes("etanol")) return "etanol";
-  if (g.includes("gasolina")) return "gasolina";
-  if (g.includes("diesel")) return "diesel";
-  return "neutral";
-};
+type Dialog =
+  | { type: "create" }
+  | { type: "edit"; product: CatalogProduct }
+  | { type: "clients"; product: CatalogProduct }
+  | { type: "delete"; product: CatalogProduct }
+  | null;
 
 export const ProductsPage = () => {
   const svc = useIoC("products");
   const [view, setView] = useState<View>("product");
   const [search, setSearch] = useState("");
-  const [group, setGroup] = useState<string>("all");
-  const [status, setStatus] = useState<StatusFilter>("all");
   // Linha-pai selecionada → abre o painel lateral de detalhes.
   const [selected, setSelected] = useState<Row | null>(null);
+  const [dialog, setDialog] = useState<Dialog>(null);
 
   // Fronteira de carregamento dos dados: dispara `svc.load()` uma vez na
   // montagem e acompanha os estados de carregamento/erro (skeleton enquanto
@@ -76,6 +64,8 @@ export const ProductsPage = () => {
   const [error, setError] = useState<Error | null>(null);
   // Incrementado pelo botão "Tentar novamente" para reexecutar o efeito.
   const [retryToken, setRetryToken] = useState(0);
+  // Incrementado após `refresh()` para recalcular as linhas do snapshot.
+  const [version, setVersion] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -101,43 +91,34 @@ export const ProductsPage = () => {
 
   const retry = useCallback(() => setRetryToken((t) => t + 1), []);
 
-  /** Grupos únicos para o filtro (apenas na visão por produto). */
-  const groups = useMemo(
-    () => [
-      "all",
-      ...new Set(svc.products.map((p) => p.group).filter((g) => g !== "")),
-    ],
-    // `loading` entra nas deps para recalcular após o `load()` assíncrono.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [svc, loading],
-  );
-  /** A API ainda não expõe grupo: esconde o filtro quando não há nenhum. */
-  const hasGroups = groups.length > 1;
+  /** Recarrega o snapshot após uma mutação e atualiza a tabela. */
+  const refresh = useCallback(async () => {
+    try {
+      await svc.refresh();
+    } catch {
+      toast.error("Não foi possível atualizar os dados.");
+    }
+    setVersion((v) => v + 1);
+    setSelected(null);
+  }, [svc]);
 
   const matchesProduct = (p: CatalogProduct): boolean => {
     const term = search.trim().toLowerCase();
-    const matchesSearch =
+    return (
       !term ||
       p.name.toLowerCase().includes(term) ||
-      p.abbreviation.toLowerCase().includes(term) ||
-      p.sapCode.toLowerCase().includes(term);
-    const matchesGroup = group === "all" || p.group === group;
-    const matchesStatus =
-      status === "all" ||
-      (status === "active" && p.active) ||
-      (status === "inactive" && !p.active);
-    return matchesSearch && matchesGroup && matchesStatus;
+      p.sapCode.toLowerCase().includes(term)
+    );
   };
 
   const productToRow = (p: CatalogProduct): Row => ({
     key: `p-${p.id}`,
     kind: "product",
+    productId: p.id,
     color: p.color,
     title: p.name,
-    sub: p.abbreviation,
+    sub: "",
     code: p.sapCode,
-    group: p.group,
-    active: p.active,
     links: svc.clientCountOfProduct(p.id),
     children: svc.clientsOfProduct(p.id).map((c) => ({
       key: `p-${p.id}-c-${c.id}`,
@@ -145,7 +126,6 @@ export const ProductsPage = () => {
       title: c.razao,
       sub: c.cnpj,
       code: c.codigo,
-      group: "",
       links: 0,
     })),
   });
@@ -155,18 +135,8 @@ export const ProductsPage = () => {
       return svc.products.filter(matchesProduct).map(productToRow);
     }
 
-    // Visão por cliente: filtra os produtos de cada cliente por grupo/status; a
-    // busca por texto casa tanto o cliente quanto seus produtos.
+    // Visão por cliente: a busca casa o cliente (nome, CNPJ, BP) ou seus produtos.
     const term = search.trim().toLowerCase();
-    const matchesProductNoSearch = (p: CatalogProduct): boolean => {
-      const matchesGroup = group === "all" || p.group === group;
-      const matchesStatus =
-        status === "all" ||
-        (status === "active" && p.active) ||
-        (status === "inactive" && !p.active);
-      return matchesGroup && matchesStatus;
-    };
-
     return svc.clients
       .map((c) => {
         const matchesClient =
@@ -175,13 +145,11 @@ export const ProductsPage = () => {
           c.codigo.toLowerCase().includes(term);
         const products = svc
           .productsOfClient(c.id)
-          .filter(matchesProductNoSearch)
           .filter(
             (p) =>
               !term ||
               matchesClient ||
               p.name.toLowerCase().includes(term) ||
-              p.abbreviation.toLowerCase().includes(term) ||
               p.sapCode.toLowerCase().includes(term),
           );
         return { c, products };
@@ -193,30 +161,22 @@ export const ProductsPage = () => {
         title: c.razao,
         sub: c.cnpj,
         code: c.codigo,
-        group: "",
         links: products.length,
         children: products.map((p) => ({
           key: `c-${c.id}-p-${p.id}`,
           kind: "product" as const,
+          productId: p.id,
           color: p.color,
           title: p.name,
-          sub: p.abbreviation,
+          sub: "",
           code: p.sapCode,
-          group: p.group,
-          active: p.active,
           links: 0,
         })),
       }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, search, group, status, svc, loading]);
+  }, [view, search, svc, loading, version]);
 
-  const clearFilters = () => {
-    setSearch("");
-    setGroup("all");
-    setStatus("all");
-  };
-
-  const hasFilter = search.trim() !== "" || group !== "all" || status !== "all";
+  const hasFilter = search.trim() !== "";
 
   const columns: TableColumn<Row>[] = [
     {
@@ -244,26 +204,23 @@ export const ProductsPage = () => {
       ),
       sortable: true,
     },
-    { id: "sub", label: "Sigla / CNPJ", accessor: (r) => r.sub },
-    { id: "code", label: "Código", accessor: (r) => r.code },
     {
-      id: "group",
-      label: "Grupo",
-      accessor: (r) => (r.kind === "product" ? r.group : "—"),
-      render: (_value, r) => {
-        if (r.kind !== "product" || !r.group) return <span className="nm-prod__muted">—</span>;
-        return (
-          <span className={`nm-prod__tag nm-prod__tag--${groupTone(r.group)}`}>
-            {r.group}
-          </span>
-        );
-      },
+      id: "sub",
+      label: "CNPJ",
+      accessor: (r) => r.sub,
+      render: (_value, r) =>
+        r.sub ? r.sub : <span className="nm-prod__muted">—</span>,
     },
     {
-      id: "status",
-      label: view === "product" ? "Clientes / Status" : "Produtos / Status",
+      id: "code",
+      label: view === "product" ? "Código SAP / BP" : "BP / Código SAP",
+      accessor: (r) => r.code,
+    },
+    {
+      id: "links",
+      label: view === "product" ? "Clientes" : "Produtos",
       align: "right",
-      accessor: (r) => r.title,
+      accessor: (r) => r.links,
       render: (_value, r) => {
         if (r.children) {
           return (
@@ -273,43 +230,90 @@ export const ProductsPage = () => {
             </span>
           );
         }
-        if (r.kind === "product") {
-          return (
-            <StatusTag
-              label={r.active ? "Ativo" : "Inativo"}
-              status={r.active ? "success" : "neutral"}
-              size="sm"
-            />
-          );
-        }
         return <span className="nm-prod__muted">—</span>;
       },
     },
   ];
 
+  // ─── Ações de escrita ──────────────────────────────────────────────────────
+  const productById = (id?: string) =>
+    id ? svc.products.find((p) => p.id === id) : undefined;
+
+  const handleCreate = async (v: { name: string; sapCode: string }) => {
+    await svc.createProduct(v);
+    toast.success("Produto cadastrado.");
+    setDialog(null);
+    await refresh();
+  };
+
+  const handleEdit = async (
+    product: CatalogProduct,
+    v: { name: string; sapCode: string },
+  ) => {
+    const changes: { name?: string; sapCode?: string } = {};
+    if (v.name !== product.name) changes.name = v.name;
+    if (v.sapCode !== product.sapCode) changes.sapCode = v.sapCode;
+    if (Object.keys(changes).length > 0) {
+      await svc.updateProduct(product.id, changes);
+      toast.success("Produto atualizado.");
+    }
+    setDialog(null);
+    await refresh();
+  };
+
+  const handleLinkClients = async (product: CatalogProduct, ids: number[]) => {
+    // Os ids numéricos são substitutos: a API recebe sempre os UUIDs reais.
+    const uuids = ids
+      .map((id) => svc.clientUuidOf(id))
+      .filter((u): u is string => !!u);
+    await svc.updateProduct(product.id, { clientUuids: uuids });
+    toast.success("Vínculos atualizados.");
+    setDialog(null);
+    await refresh();
+  };
+
+  const handleDelete = async (product: CatalogProduct) => {
+    await svc.deleteProduct(product.id);
+    toast.success(`Produto "${product.name}" excluído.`);
+    setDialog(null);
+    await refresh();
+  };
+
+  const pageStyle = {
+    padding: "24px 28px",
+    display: "flex",
+    flexDirection: "column" as const,
+    gap: 18,
+  };
+
+  const header = (withCreate: boolean) => (
+    <PageTitleCard
+      title="Produtos"
+      subtitle="Catálogo de produtos e seus vínculos com clientes"
+      actions={
+        withCreate && (
+          <Button variant="contained" onClick={() => setDialog({ type: "create" })}>
+            + Novo produto
+          </Button>
+        )
+      }
+    />
+  );
+
   // ─── Fronteira de carregamento ────────────────────────────────────────────
-  // Estado de carregamento: exibe um skeleton de tabela enquanto `load()` está
-  // pendente (inerte sob o mock, que resolve imediatamente).
   if (loading) {
     return (
-      <div style={{ padding: "24px 28px", display: "flex", flexDirection: "column", gap: 18 }}>
-        <PageTitleCard
-          title="Produtos"
-          subtitle="Catálogo de produtos e seus vínculos com clientes"
-        />
-        <Skeleton.Table rows={6} columns={5} showHeader />
+      <div style={pageStyle} aria-busy="true">
+        {header(false)}
+        <Skeleton.Table rows={6} columns={4} showHeader />
       </div>
     );
   }
 
-  // Estado de erro: mensagem + ação de nova tentativa.
   if (error) {
     return (
-      <div style={{ padding: "24px 28px", display: "flex", flexDirection: "column", gap: 18 }}>
-        <PageTitleCard
-          title="Produtos"
-          subtitle="Catálogo de produtos e seus vínculos com clientes"
-        />
+      <div style={pageStyle}>
+        {header(false)}
         <div className="nm-prod__error">
           <p className="nm-prod__error-msg">{error.message}</p>
           <Button variant="contained" onClick={retry}>
@@ -321,11 +325,8 @@ export const ProductsPage = () => {
   }
 
   return (
-    <div style={{ padding: "24px 28px", display: "flex", flexDirection: "column", gap: 18 }}>
-      <PageTitleCard
-        title="Produtos"
-        subtitle="Catálogo de produtos e seus vínculos com clientes"
-      />
+    <div style={pageStyle}>
+      {header(true)}
 
       {/* Filtros */}
       <div className="nm-prod__filtros">
@@ -333,8 +334,8 @@ export const ProductsPage = () => {
           size="sm"
           placeholder={
             view === "product"
-              ? "Buscar por nome, sigla ou código SAP…"
-              : "Buscar por produto ou cliente…"
+              ? "Buscar por nome ou código SAP…"
+              : "Buscar por cliente, CNPJ, BP ou produto…"
           }
           leadingIcon={<Search size={16} />}
           value={search}
@@ -342,30 +343,8 @@ export const ProductsPage = () => {
           style={{ flex: "1 1 0", minWidth: 0 }}
         />
 
-        {view === "product" && hasGroups && (
-          <Select<string>
-            size="sm"
-            value={group}
-            options={groups.map((g) => ({ option: g }))}
-            getOptionItemLabel={(g) => (g === "all" ? "Todos os grupos" : g)}
-            getSelectedOptionLabel={(g) => (g === "all" ? "Todos os grupos" : g)}
-            onChange={(g) => setGroup(g)}
-            style={{ flex: "0 0 200px" }}
-          />
-        )}
-
-        <Select<StatusFilter>
-          size="sm"
-          value={status}
-          options={STATUS_OPTS.map((s) => ({ option: s }))}
-          getOptionItemLabel={(s) => STATUS_LABEL[s]}
-          getSelectedOptionLabel={(s) => STATUS_LABEL[s]}
-          onChange={(s) => setStatus(s)}
-          style={{ flex: "0 0 200px" }}
-        />
-
         {hasFilter && (
-          <Button variant="outlined" size="sm" onClick={clearFilters}>
+          <Button variant="outlined" size="sm" onClick={() => setSearch("")}>
             Limpar filtros
           </Button>
         )}
@@ -395,7 +374,54 @@ export const ProductsPage = () => {
       />
 
       {selected && (
-        <DetailsDrawer row={selected} view={view} onClose={() => setSelected(null)} />
+        <DetailsDrawer
+          row={selected}
+          view={view}
+          onClose={() => setSelected(null)}
+          onEdit={() => {
+            const p = productById(selected.productId);
+            if (p) setDialog({ type: "edit", product: p });
+          }}
+          onLinks={() => {
+            const p = productById(selected.productId);
+            if (p) setDialog({ type: "clients", product: p });
+          }}
+          onDelete={() => {
+            const p = productById(selected.productId);
+            if (p) setDialog({ type: "delete", product: p });
+          }}
+        />
+      )}
+
+      {dialog?.type === "create" && (
+        <ProductFormDialog
+          product={null}
+          onClose={() => setDialog(null)}
+          onSubmit={handleCreate}
+        />
+      )}
+      {dialog?.type === "edit" && (
+        <ProductFormDialog
+          product={dialog.product}
+          onClose={() => setDialog(null)}
+          onSubmit={(v) => handleEdit(dialog.product, v)}
+        />
+      )}
+      {dialog?.type === "clients" && (
+        <ProductClientsDialog
+          product={dialog.product}
+          clients={svc.clients}
+          initialIds={svc.clientsOfProduct(dialog.product.id).map((c) => c.id)}
+          onClose={() => setDialog(null)}
+          onSubmit={(ids) => handleLinkClients(dialog.product, ids)}
+        />
+      )}
+      {dialog?.type === "delete" && (
+        <DeleteProductDialog
+          product={dialog.product}
+          onClose={() => setDialog(null)}
+          onConfirm={() => handleDelete(dialog.product)}
+        />
       )}
     </div>
   );
@@ -404,25 +430,31 @@ export const ProductsPage = () => {
 /**
  * Painel lateral de detalhes da linha-pai selecionada.
  *
- * Princípio: cada informação aparece UMA ÚNICA VEZ. Os metadados do item-pai
- * (sigla/CNPJ, código e — quando produto — grupo) ficam só no topo; a lista de
- * vinculados mostra apenas o que é específico de cada vínculo, sem repetir os
- * campos já exibidos no cabeçalho.
+ * Cada informação aparece uma única vez: os metadados do item-pai ficam no
+ * topo e a lista de vinculados mostra só o que é específico de cada vínculo.
+ * Para produtos, expõe as ações de escrita (editar, clientes, excluir).
  */
 interface DetailsDrawerProps {
   row: Row;
   view: View;
   onClose: () => void;
+  onEdit: () => void;
+  onLinks: () => void;
+  onDelete: () => void;
 }
 
-const DetailsDrawer = ({ row, view, onClose }: DetailsDrawerProps) => {
+const DetailsDrawer = ({
+  row,
+  view,
+  onClose,
+  onEdit,
+  onLinks,
+  onDelete,
+}: DetailsDrawerProps) => {
   const isProduct = row.kind === "product";
   const children = row.children ?? [];
-  // Rótulo da relação conforme a visão atual.
   const linkedLabel = view === "product" ? "Clientes vinculados" : "Produtos vinculados";
-  // Nos filhos de um produto (clientes), `sub` = CNPJ. Nos filhos de um cliente
-  // (produtos), `sub` = sigla. Rotulamos a coluna de acordo.
-  const childSubLabel = isProduct ? "CNPJ" : "Sigla";
+  const childSubLabel = isProduct ? "CNPJ" : "Código SAP";
 
   return (
     <>
@@ -444,41 +476,33 @@ const DetailsDrawer = ({ row, view, onClose }: DetailsDrawerProps) => {
           </button>
         </header>
 
-        {/* Metadados do item — exibidos UMA única vez */}
         <dl className="nm-prod__drawer-meta">
+          {!isProduct && (
+            <div>
+              <dt>CNPJ</dt>
+              <dd>{row.sub || "—"}</dd>
+            </div>
+          )}
           <div>
-            <dt>{isProduct ? "Sigla" : "CNPJ"}</dt>
-            <dd>{row.sub || "—"}</dd>
-          </div>
-          <div>
-            <dt>Código</dt>
+            <dt>{isProduct ? "Código SAP" : "BP"}</dt>
             <dd>{row.code || "—"}</dd>
           </div>
-          {isProduct && row.group && (
-            <div>
-              <dt>Grupo</dt>
-              <dd>
-                <span className={`nm-prod__tag nm-prod__tag--${groupTone(row.group)}`}>
-                  {row.group}
-                </span>
-              </dd>
-            </div>
-          )}
-          {isProduct && (
-            <div>
-              <dt>Status</dt>
-              <dd>
-                <StatusTag
-                  label={row.active ? "Ativo" : "Inativo"}
-                  status={row.active ? "success" : "neutral"}
-                  size="sm"
-                />
-              </dd>
-            </div>
-          )}
         </dl>
 
-        {/* Lista de vinculados — só os campos específicos do vínculo */}
+        {isProduct && row.productId && (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", padding: "0 16px 12px" }}>
+            <Button variant="outlined" size="sm" onClick={onEdit}>
+              Editar
+            </Button>
+            <Button variant="outlined" size="sm" onClick={onLinks}>
+              Clientes
+            </Button>
+            <Button variant="outlined" size="sm" color="error" onClick={onDelete}>
+              Excluir
+            </Button>
+          </div>
+        )}
+
         <section className="nm-prod__drawer-section">
           <h3 className="nm-prod__drawer-section-title">
             <Users size={16} aria-hidden="true" />
@@ -504,16 +528,11 @@ const DetailsDrawer = ({ row, view, onClose }: DetailsDrawerProps) => {
                   <div className="nm-prod__linked-main">
                     <span className="nm-prod__linked-name">{c.title}</span>
                     <span className="nm-prod__linked-sub">
-                      {childSubLabel}: {c.sub || "—"} · Código: {c.code || "—"}
+                      {c.kind === "client"
+                        ? `${childSubLabel}: ${c.sub || "—"} · BP: ${c.code || "—"}`
+                        : `${childSubLabel}: ${c.code || "—"}`}
                     </span>
                   </div>
-                  {c.kind === "product" && (
-                    <StatusTag
-                      label={c.active ? "Ativo" : "Inativo"}
-                      status={c.active ? "success" : "neutral"}
-                      size="sm"
-                    />
-                  )}
                 </li>
               ))}
             </ul>
