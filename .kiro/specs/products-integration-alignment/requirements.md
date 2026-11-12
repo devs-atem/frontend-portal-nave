@@ -57,13 +57,15 @@ Esta feature atualiza a integração da tela **Produtos** (`/products`) do `fron
 
 **História de usuário:** Como usuário, quero que a tela carregue rápido, mesmo com muitos produtos e clientes.
 
+> **Revisado após a implementação:** a versão original (carga completa por `/all` + detalhe do lado com menos registros, pool de concorrência de 6 e `refresh()` no data source) foi substituída por listagem paginada com detalhe sob demanda, quando a API passou a oferecer `GET /rest/products` e `GET /rest/clients` paginados. A carga inicial deixa de ter N+1 e não precisa de pool.
+
 #### Critérios de Aceitação
 
-1. O `load()` DEVE obter a lista de produtos por `GET /rest/products/all` e a de clientes por `GET /rest/clients/all`.
-2. Como as listagens não trazem relações, O `load()` DEVE buscar o detalhe (`GET /rest/products/:id` ou `GET /rest/clients/:id`) **apenas do lado com menos registros** e derivar todos os vínculos N:N a partir dele.
-3. O `load()` DEVE limitar a concorrência das requisições de detalhe (padrão: 6 simultâneas).
-4. SE o detalhe de um item falhar, ENTÃO O `load()` DEVE falhar com erro único e a página DEVE exibir "Tentar novamente" (sem exibir vínculos parciais como se fossem completos).
-5. O `load()` DEVE continuar idempotente, e um novo método `refresh()` DEVE descartar o snapshot e recarregar (usado após mutações).
+1. A Products_Page DEVE carregar só a página corrente de cada visão: `GET /rest/products?page&limit` ("Por produto") e `GET /rest/clients?page&limit` ("Por cliente"), sem `/all` e sem detalhe por item.
+2. Os vínculos N:N DEVEM ser carregados sob demanda, ao abrir o painel lateral: `GET /rest/products/:id` (clientes do produto) ou `GET /rest/clients/:id` (produtos do cliente), apenas do item aberto.
+3. As listagens completas (`/rest/products/all`, `/rest/clients/all`) SÓ DEVEM ser chamadas pelos seletores dos diálogos de vínculo.
+4. SE a listagem falhar, ENTÃO a página DEVE exibir mensagem de erro e "Tentar novamente". SE o detalhe falhar, ENTÃO o painel DEVE exibir estado de erro, sem mostrar vínculos parciais.
+5. Após uma mutação bem-sucedida, a Products_Page DEVE recarregar a página corrente (`refresh` na página) e fechar o painel de detalhe.
 
 ### Requisito 3: Criação de produto
 
@@ -136,8 +138,8 @@ Esta feature atualiza a integração da tela **Produtos** (`/products`) do `fron
 
 #### Critérios de Aceitação
 
-1. ENQUANTO `load()` estiver pendente, A Products_Page DEVE exibir skeleton de tabela.
-2. SE `load()` falhar, ENTÃO A Products_Page DEVE exibir mensagem de erro e "Tentar novamente".
+1. ENQUANTO a carga da página corrente estiver pendente, A Products_Page DEVE exibir skeleton de tabela.
+2. SE a carga da página corrente falhar, ENTÃO A Products_Page DEVE exibir mensagem de erro e "Tentar novamente".
 3. QUANDO a API responder 400, A Products_Page DEVE exibir "Dados inválidos. Revise os campos informados."
 4. QUANDO a API responder 401, A Products_Page DEVE delegar ao fluxo global de autenticação.
 5. Mensagens de 409 em português devolvidas pela API DEVEM ser exibidas diretamente.
@@ -149,10 +151,11 @@ Esta feature atualiza a integração da tela **Produtos** (`/products`) do `fron
 #### Critérios de Aceitação
 
 1. `contract.ts` DEVE manter `CreateProductRequest` e `UpdateProductRequest` como únicos formatos de escrita de produto.
-2. O Products_Data_Source DEVE expor `createProduct`, `updateProduct`, `deleteProduct`, `refresh()` e `clientUuidOf(clientId)`.
-3. `ApiProductsDataSource` DEVE ser testado com `http` mockado: carga pelo lado menor, limite de concorrência, falha de detalhe, mapeamento sem campos fictícios, Full_Replace de `clientIds` com UUIDs, omissão de `clientIds`, `DELETE` com 500.
+2. O Products_Data_Source DEVE expor `loadProductsPage`, `loadClientsPage`, `getProductDetail`, `getClientDetail`, `listAllClients`, `listAllProducts`, `createProduct`, `updateProduct`, `deleteProduct`, `updateClientProducts` e `clientUuidOf(clientId)`. A recarga após mutações é responsabilidade da página (não há `refresh()` no data source).
+3. `ApiProductsDataSource` DEVE ser testado com `http` mockado: listagem paginada sem `/all` nem detalhe por item, detalhe sob demanda, falha de detalhe, mapeamento sem campos fictícios, reconciliação de ids substitutos, Full_Replace de `clientIds` com UUIDs, omissão de `clientIds`, `DELETE` com 500.
 
 ## Atualização pós-implementação
 
 - **Requisito 7 (permissões de escrita)** não foi implementado: o back de produtos não aplica RBAC por rota e a chave `portal_nave:products:write` não foi criada.
-- Requisitos 1 a 6, 8 e 9 estão implementados. As ações de edição ficam no painel lateral do produto. Divergências em `tasks.md` ("Status da implementação").
+- **Requisitos 2 e 9** foram revisados para refletir a carga paginada com detalhe sob demanda (o desenho original, de carga pelo lado menor com pool de concorrência e `refresh()` no data source, foi descartado). Na forma revisada, estão implementados.
+- Requisitos 1, 3 a 6 e 8 estão implementados como escritos, com a ressalva de que o `refresh()` citado em 3.3, 4.6 e 6.2 é o da página. As ações de edição ficam no painel lateral do produto. Divergências em `tasks.md` ("Status da implementação").

@@ -20,8 +20,8 @@ graph TD
   Page[ProductsPage] -->|useIoC products| DS[ProductsDataSource]
   DS --> Api[ApiProductsDataSource]
   Api --> Http[IHttpService]
-  Http --> P[(/rest/products, /rest/products/all, /rest/products/:id)]
-  Http --> C[(/rest/clients/all, /rest/clients/:id)]
+  Http --> P[(/rest/products?page, /rest/products/all, /rest/products/:id)]
+  Http --> C[(/rest/clients?page, /rest/clients/all, /rest/clients/:id)]
   Page --> Auth[authByPermission products:write]
 ```
 
@@ -41,57 +41,63 @@ export interface CatalogProduct {
 
 `abbreviation`, `group` e `active` são removidos do tipo. Os usos em `ProductsPage`, `ProductsPage.css` (tags de grupo `nm-prod__tag--*`) e testes existentes são ajustados (tarefa dedicada). `ProductClientLink` permanece.
 
-### `ProductsDataSource` (estendido)
+### `ProductsDataSource` (como implementado)
+
+> **Revisado após a implementação:** o desenho original mantinha um snapshot completo (`products`, `clients`, `clientsOfProduct`…), com `load()` idempotente e `refresh()`. Ele foi substituído por métodos de página + detalhe sob demanda, sem snapshot. A fonte de verdade é `src/features/products/services/ProductsDataSource.ts`.
 
 ```ts
 export interface ProductsDataSource {
-  readonly products: CatalogProduct[];
-  readonly clients: Cliente[];
-  clientsOfProduct(productId: string): Cliente[];
-  productsOfClient(clientId: number): CatalogProduct[];
-  clientCountOfProduct(productId: string): number;
-  productCountOfClient(clientId: number): number;
+  /** `GET /rest/products?page&limit` — sem vínculos. */
+  loadProductsPage(q: PageQuery): Promise<PagedResult<CatalogProduct>>;
+  /** `GET /rest/clients?page&limit` — sem vínculos. */
+  loadClientsPage(q: PageQuery): Promise<PagedResult<Cliente>>;
+  /** `GET /rest/products/:id` — clientes vinculados, ao abrir o painel. */
+  getProductDetail(productId: string): Promise<ProductWithClients>;
+  /** `GET /rest/clients/:id` — produtos vinculados, ao abrir o painel. */
+  getClientDetail(clientId: number): Promise<ClientWithProducts>;
+  /** `/all` só para os seletores dos diálogos de vínculo. */
+  listAllClients(): Promise<Cliente[]>;
+  listAllProducts(): Promise<CatalogProduct[]>;
 
-  load(): Promise<void>;               // idempotente
-  refresh(): Promise<void>;            // descarta snapshot e recarrega
-
-  createProduct(input: { name: string; sapCode: string }): Promise<CatalogProduct>;
-  updateProduct(id: string, input: {
-    name?: string; sapCode?: string;
-    clientUuids?: string[];            // omitido = não altera
-  }): Promise<CatalogProduct>;
+  createProduct(input: NewProductInput): Promise<CatalogProduct>;
+  updateProduct(id: string, changes: ProductChanges): Promise<CatalogProduct>; // clientUuids omitido = não altera
   deleteProduct(id: string): Promise<void>;
+  /** `PATCH /rest/clients/:id` com `productIds` (substituição total). */
+  updateClientProducts(clientId: number, productIds: string[]): Promise<void>;
 
   /** Tradução id numérico substituto → UUID real (uso interno de mutações). */
   clientUuidOf(clientId: number): string | undefined;
 }
 ```
 
-A página converte a seleção de clientes (ids numéricos) em UUIDs por `clientUuidOf` antes de chamar `updateProduct`, mantendo os ids substitutos confinados ao data source.
+A página converte a seleção de clientes (ids numéricos) em UUIDs por `clientUuidOf` antes de chamar `updateProduct`, mantendo os ids substitutos confinados ao data source. Se algum id não tiver UUID, a operação é abortada com mensagem (descartar o id apagaria o vínculo, por ser substituição total).
 
-### Carga pelo lado menor (Requisito 2)
+### Carga paginada com detalhe sob demanda (Requisito 2)
 
 ```text
-load():
-  products = GET /products/all
-  clients  = GET /clients/all
-  if products.length <= clients.length:
-      details = pool(6, products.map(p => GET /products/:id))      // p.clients
-      links = ∪ (p.id, c.id)
-  else:
-      details = pool(6, clients.map(c => GET /clients/:id))        // c.products
-      links = ∪ (p.id, c.id)
-  falha em qualquer detalhe → rejeita (sem snapshot parcial)
+abrir a tela / trocar página ou visão:
+  "Por produto" → GET /products?page&limit
+  "Por cliente" → GET /clients?page&limit
+  falha → mensagem + "Tentar novamente"
+
+abrir o painel de um item:
+  produto → GET /products/:id   (clients)
+  cliente → GET /clients/:id    (products)
+  falha → painel em estado de erro (sem vínculos parciais)
+  respostas fora de ordem são descartadas (id da última requisição)
+
+abrir diálogo de vínculo:
+  GET /clients/all ou GET /products/all (seletor)
 ```
 
-`pool(n, tasks)` é um helper pequeno de concorrência limitada (sem nova dependência). Cada lado fornece o conjunto **completo** de vínculos (relação N:N simétrica), portanto basta um deles.
+Não há pool de concorrência: a carga inicial faz uma requisição por visão, e o detalhe é de um item por vez. GETs idênticos em andamento são deduplicados em `AxiosHttpService` (StrictMode em dev).
 
 ### Escrita
 
 - `createProduct` → `POST PRODUCTS_ENDPOINTS.productsRoot` com `CreateProductRequest`.
 - `updateProduct` → `PATCH productById(id)` com apenas as chaves definidas; `clientUuids` vira `clientIds`.
 - `deleteProduct` → `DELETE productById(id)`. Erros HTTP propagam como `AppError`; quem decide a mensagem é a página.
-- Após qualquer mutação bem-sucedida a página chama `refresh()`.
+- Após qualquer mutação bem-sucedida, a página chama o seu `refresh` (fecha o painel e recarrega a página corrente).
 
 ### Mensagens de erro
 
@@ -132,7 +138,8 @@ function productErrorMessage(err: unknown, op: "save" | "delete"): string {
 ## Decisões e riscos
 
 - **Remover campos fictícios** reduz confusão mas altera a UI existente (filtros some). Registrado como decisão no Requisito 1.
-- **N+1 residual**: mesmo no lado menor ainda há N requisições; mitigado por concorrência limitada. Solução definitiva é o back devolver relações nas listagens (pedido ao back).
+- **N+1 eliminado na carga inicial**: com a listagem paginada, a tela não busca detalhe por item; o detalhe vem só do item aberto. Incluir relações nas listagens continua como pedido ao back (mostraria contagens sem abrir o painel).
+- **Busca só na página corrente**: a API paginada não aceita termo de busca; a busca filtra apenas os itens carregados.
 - **Aviso de `sapCode` sempre exibido**: o front não sabe se o produto está em contrato; consultar a spec 3 para "produto em uso" fica como melhoria.
 - **Delete em uso (500)**: tratado no front; correção para 409 é pedido ao back. A página trata 500 e 409 igualmente.
 - **Ids numéricos substitutos** nunca vão para a API: toda escrita passa por `clientUuidOf`.
@@ -140,4 +147,4 @@ function productErrorMessage(err: unknown, op: "save" | "delete"): string {
 
 ## Estratégia de testes
 
-Vitest com `http` mockado: carga pelo lado menor (ambos os ramos), concorrência ≤ 6, falha em um detalhe, ausência de campos fictícios, `updateProduct` com/sem `clientIds`, conversão id numérico → UUID, delete com 500, `productErrorMessage` por status. Atualizar `ApiProductsDataSource.test.ts` e `contract.test.ts` existentes.
+Vitest com `http` mockado: listagem paginada sem `/all` nem detalhe por item, detalhe sob demanda (produto e cliente), falha em detalhe, reconciliação de ids substitutos, ausência de campos fictícios, `updateProduct` com/sem `clientIds`, `updateClientProducts`, delete com 500, `productErrorMessage` por status. Deduplicação de GET em `AxiosHttpService.test.ts` e redirect da raiz em `HomeRedirect.test.tsx`.
