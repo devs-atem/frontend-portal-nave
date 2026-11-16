@@ -19,7 +19,7 @@ export const reamPreset: AuthPreset = {
 
   loginSpa: {
     url: {
-      development: "http://localhost:3000/#/logout",
+      development: "https://auth-dev.ream.com.br/#/logout",
       homologation: "https://auth-dev.ream.com.br/#/logout",
       production: "https://auth.ream.com.br/#/logout",
     },

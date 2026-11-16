@@ -20,7 +20,7 @@ export const atemPreset: AuthPreset = {
 
   loginSpa: {
     url: {
-      development: "http://localhost:3000/#/logout",
+      development: "https://authcog-dev.grupoatem.com.br/#/logout",
       homologation: "https://authcog-dev.grupoatem.com.br/#/logout",
       production: "https://authcog.grupoatem.com.br/#/logout",
     },

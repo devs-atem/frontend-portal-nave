@@ -20,7 +20,24 @@ mise run setup
 mise run dev
 ```
 
-Depois disso abre `http://localhost:5173`.
+Depois disso abre `https://localhost:5173` (ou `http://localhost:5173` se `VITE_HTTPS` não for `true`).
+
+### Localhost com SSL
+
+O login hospedado só aceita a origem `https://localhost-dev.<domínio>`. Para rodar local com HTTPS:
+
+1. Defina `VITE_HTTPS=true` no `.env` (o `mise run setup` já grava; veja `.env.example`).
+2. Adicione o alias do seu provider ao `/etc/hosts`:
+
+   ```
+   127.0.0.1 localhost-dev.grupoatem.com.br   # VITE_AUTH_PROVIDER=atem
+   127.0.0.1 localhost-dev.ream.com.br        # VITE_AUTH_PROVIDER=ream
+   ```
+
+3. Rode `mise run dev` (ou `yarn dev`). O navegador abre em `https://localhost-dev.<domínio>:5173`.
+4. O certificado é autoassinado: aceite o aviso do navegador uma vez.
+
+`https://localhost:5173` continua funcionando. Sem `VITE_HTTPS=true`, o servidor sobe em `http://`. `mise run doctor` avisa se o `.env` pede HTTPS e o `vite.config.ts` não o habilita.
 
 Se preferir sem mise: `yarn install && yarn setup && yarn dev`.
 
@@ -383,7 +400,7 @@ Via mise (recomendado):
 | `mise run setup` | Wizard interativo (nome, auth, flags…) |
 | `mise run doctor` | Valida ambiente (.env, deps, versões) |
 | `mise run generate` | Scaffolda uma nova feature |
-| `mise run dev` | Dev server em http://localhost:3000 |
+| `mise run dev` | Dev server em https://localhost:5173 (ou http, se `VITE_HTTPS` não for `true`) |
 | `mise run build` | Build de produção |
 | `mise run preview` | Preview do build |
 | `mise run lint` | ESLint |
@@ -422,7 +439,16 @@ Deixe `VITE_FLAGSMITH_ENV_ID` vazio. O `FlagsmithProvider` detecta e pula o prov
 Vem só com "Home". Rode `yarn generate module` pra criar o primeiro módulo de negócio.
 
 **Como testo logout em dev?**
-Em dev, `loginSpa.url.development` aponta pra `localhost:3000/#/logout`. Rode a SPA de login (`auth-front-atem` ou `front-auth-ream`) em paralelo pra ter o fluxo completo.
+Em dev, `loginSpa.url.development` aponta pro SPA de login hospedado (`authcog-dev.grupoatem.com.br` no preset Atem, `auth-dev.ream.com.br` no Ream). O logout redireciona pra lá com `url=<origem do dev server>`; não precisa rodar o SPA de login localmente. Com `VITE_HTTPS=true` o navegador mostra aviso de certificado autoassinado — aceite uma vez.
+
+Os SPAs de login hospedados esperam a origem `localhost-dev.grupoatem.com.br` (Atem) ou `localhost-dev.ream.com.br` (Ream). Adicione ao `/etc/hosts`:
+
+```
+127.0.0.1 localhost-dev.grupoatem.com.br
+127.0.0.1 localhost-dev.ream.com.br
+```
+
+O `yarn dev` abre o navegador no alias do provider (`https://localhost-dev.<domínio>:5173`); `localhost:5173` continua funcionando.
 
 **`useIoC("x")` não tem autocomplete, por quê?**
 Garanta que a feature tenha o bloco `declare module "@core/ioc/registry" { interface AppServices { x: XService } }` no `module.tsx`. Esse aumento de tipo é lido pelo TS globalmente, mas só se o `module.tsx` foi importado em algum lugar — a descoberta por `import.meta.glob` garante isso.

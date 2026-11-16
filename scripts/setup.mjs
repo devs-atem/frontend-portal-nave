@@ -257,7 +257,7 @@ async function main() {
   log.title("┗━ Pronto!");
   console.log(`
 Próximos passos:
-  ${COLORS.cyan}mise run dev${COLORS.reset}       # sobe o dev server em http://localhost:3000
+  ${COLORS.cyan}mise run dev${COLORS.reset}       # sobe o dev server em https://localhost:5173
   ${COLORS.cyan}mise run doctor${COLORS.reset}    # valida o ambiente
 
 Documentação completa: ${COLORS.dim}./README.md${COLORS.reset}

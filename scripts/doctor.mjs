@@ -87,6 +87,19 @@ check("Variáveis obrigatórias no .env", () => {
   return "todas presentes";
 });
 
+warn("VITE_HTTPS consistente com vite.config", () => {
+  const envPath = join(ROOT, ".env");
+  if (!existsSync(envPath)) return "sem .env";
+  const httpsOn = /^VITE_HTTPS=true\s*$/m.test(readFileSync(envPath, "utf-8"));
+  if (!httpsOn) return "HTTPS desligado (http://localhost:5173)";
+  const cfg = readFileSync(join(ROOT, "vite.config.ts"), "utf-8");
+  if (!/VITE_HTTPS/.test(cfg) || !/basic-ssl|https\s*:/.test(cfg))
+    throw new Error(
+      "VITE_HTTPS=true mas vite.config.ts não habilita HTTPS",
+    );
+  return "HTTPS ligado (https://localhost:5173)";
+});
+
 warn("node_modules instalado", () =>
   existsSync(join(ROOT, "node_modules")) && "sim",
 );

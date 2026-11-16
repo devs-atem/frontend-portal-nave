@@ -25,7 +25,7 @@ description = "Instala dependências com yarn"
 run = "yarn install"
 
 [tasks.dev]
-description = "Sobe o Vite em modo desenvolvimento"
+description = "Sobe o Vite em modo desenvolvimento (https://localhost:5173 com VITE_HTTPS=true)"
 run = "yarn dev"
 
 [tasks.build]
