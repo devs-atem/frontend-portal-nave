@@ -109,7 +109,15 @@ let httpsInspection;
 try {
   httpsInspection = await inspectHttps();
 } catch (err) {
-  httpsInspection = { error: err instanceof Error ? err.message : String(err) };
+  // Sem o vite (ex.: antes do yarn install) não dá para usar o loadEnv. Só reporta o
+  // erro se o .env pede HTTPS; senão o check não é necessário.
+  const envFile = join(ROOT, ".env");
+  const httpsRequested =
+    existsSync(envFile) &&
+    /^VITE_HTTPS\s*=\s*["']?true\b/m.test(readFileSync(envFile, "utf-8"));
+  httpsInspection = httpsRequested
+    ? { error: err instanceof Error ? err.message : String(err) }
+    : { httpsOn: false };
 }
 
 warn("VITE_HTTPS consistente com vite.config", () => {

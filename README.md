@@ -448,7 +448,9 @@ Os SPAs de login hospedados esperam a origem `portalnave-localhost-dev.grupoatem
 127.0.0.1 localhost-dev.ream.com.br
 ```
 
-O `yarn dev` abre o navegador no alias do provider (`https://localhost-dev.<domínio>:5173`); `localhost:5173` continua funcionando.
+O `yarn dev` abre o navegador no alias do provider (`https://portalnave-localhost-dev.grupoatem.com.br:5173` no Atem, `https://localhost-dev.ream.com.br:5173` no Ream); `localhost:5173` continua funcionando.
+
+A porta padrão é `5173`. Para usar outra, passe `--port`: `yarn dev --port 3000`. O navegador abre o alias nessa porta, e o servidor falha se ela estiver ocupada.
 
 **`useIoC("x")` não tem autocomplete, por quê?**
 Garanta que a feature tenha o bloco `declare module "@core/ioc/registry" { interface AppServices { x: XService } }` no `module.tsx`. Esse aumento de tipo é lido pelo TS globalmente, mas só se o `module.tsx` foi importado em algum lugar — a descoberta por `import.meta.glob` garante isso.
