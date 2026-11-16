@@ -87,19 +87,38 @@ check("Variáveis obrigatórias no .env", () => {
   return "todas presentes";
 });
 
+// Carrega a config real do Vite (modo development) e verifica se o plugin de SSL
+// está ativo. Feito antes dos checks porque os checks são síncronos.
+async function inspectHttps() {
+  const { loadEnv, loadConfigFromFile } = await import("vite");
+  // loadEnv lê o .env como o Vite (remove aspas e comentários de fim de linha).
+  const httpsOn = loadEnv("development", ROOT, "").VITE_HTTPS === "true";
+  if (!httpsOn) return { httpsOn };
+  const loaded = await loadConfigFromFile(
+    { command: "serve", mode: "development" },
+    undefined,
+    ROOT,
+    "silent",
+  );
+  const plugins = (loaded?.config.plugins ?? []).flat(Infinity);
+  const sslActive = plugins.some((p) => p && typeof p === "object" && p.name === "vite:basic-ssl");
+  return { httpsOn, sslActive };
+}
+
+let httpsInspection;
+try {
+  httpsInspection = await inspectHttps();
+} catch (err) {
+  httpsInspection = { error: err instanceof Error ? err.message : String(err) };
+}
+
 warn("VITE_HTTPS consistente com vite.config", () => {
-  const envPath = join(ROOT, ".env");
-  if (!existsSync(envPath)) return "sem .env";
-  const httpsOn = /^VITE_HTTPS=true\s*$/m.test(readFileSync(envPath, "utf-8"));
-  if (!httpsOn) return "HTTPS desligado (http://localhost:5173)";
-  // Ignora comentários para que um `basicSsl()` comentado não conte como habilitado.
-  const cfg = readFileSync(join(ROOT, "vite.config.ts"), "utf-8")
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .replace(/^\s*\/\/.*$/gm, "");
-  if (!/VITE_HTTPS/.test(cfg) || !/basicSsl\(\)/.test(cfg))
-    throw new Error(
-      "VITE_HTTPS=true mas vite.config.ts não habilita HTTPS",
-    );
+  if (!existsSync(join(ROOT, ".env"))) return "sem .env";
+  if (httpsInspection.error)
+    throw new Error(`não foi possível carregar vite.config.ts (${httpsInspection.error})`);
+  if (!httpsInspection.httpsOn) return "HTTPS desligado (http://localhost:5173)";
+  if (!httpsInspection.sslActive)
+    throw new Error("VITE_HTTPS=true mas vite.config.ts não habilita HTTPS");
   return "HTTPS ligado (https://localhost:5173)";
 });
 
