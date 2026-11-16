@@ -38,6 +38,8 @@ export function resolveEnv(): AuthEnv {
   const explicit = import.meta.env.VITE_APP_ENV as AuthEnv | undefined;
   if (explicit) return explicit;
   const { hostname } = window.location;
+  // Aliases locais (portalnave-localhost-dev.grupoatem.com.br / localhost-dev.ream.com.br) são dev, não homologação.
+  if (/^(portalnave-localhost-dev\.grupoatem|localhost-dev\.ream)\.com\.br$/.test(hostname)) return "development";
   if (hostname === "localhost" || /^127\./.test(hostname) || /^192\.168\./.test(hostname)) {
     return "development";
   }

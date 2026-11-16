@@ -87,6 +87,49 @@ check("Variáveis obrigatórias no .env", () => {
   return "todas presentes";
 });
 
+// Carrega a config real do Vite (modo development) e verifica se o plugin de SSL
+// está ativo. Feito antes dos checks porque os checks são síncronos.
+async function inspectHttps() {
+  const { loadEnv, loadConfigFromFile } = await import("vite");
+  // loadEnv lê o .env como o Vite (remove aspas e comentários de fim de linha).
+  const httpsOn = loadEnv("development", ROOT, "").VITE_HTTPS === "true";
+  if (!httpsOn) return { httpsOn };
+  const loaded = await loadConfigFromFile(
+    { command: "serve", mode: "development" },
+    undefined,
+    ROOT,
+    "silent",
+  );
+  const plugins = (loaded?.config.plugins ?? []).flat(Infinity);
+  const sslActive = plugins.some((p) => p && typeof p === "object" && p.name === "vite:basic-ssl");
+  return { httpsOn, sslActive };
+}
+
+let httpsInspection;
+try {
+  httpsInspection = await inspectHttps();
+} catch (err) {
+  // Sem o vite (ex.: antes do yarn install) não dá para usar o loadEnv. Só reporta o
+  // erro se o .env pede HTTPS; senão o check não é necessário.
+  const envFile = join(ROOT, ".env");
+  const httpsRequested =
+    existsSync(envFile) &&
+    /^VITE_HTTPS\s*=\s*["']?true\b/m.test(readFileSync(envFile, "utf-8"));
+  httpsInspection = httpsRequested
+    ? { error: err instanceof Error ? err.message : String(err) }
+    : { httpsOn: false };
+}
+
+warn("VITE_HTTPS consistente com vite.config", () => {
+  if (!existsSync(join(ROOT, ".env"))) return "sem .env";
+  if (httpsInspection.error)
+    throw new Error(`não foi possível carregar vite.config.ts (${httpsInspection.error})`);
+  if (!httpsInspection.httpsOn) return "HTTPS desligado (http://localhost:5173)";
+  if (!httpsInspection.sslActive)
+    throw new Error("VITE_HTTPS=true mas vite.config.ts não habilita HTTPS");
+  return "HTTPS ligado (https://localhost:5173)";
+});
+
 warn("node_modules instalado", () =>
   existsSync(join(ROOT, "node_modules")) && "sim",
 );
