@@ -34,8 +34,8 @@ Em desenvolvimento, o redirect de logout SHALL apontar para o SPA de login hospe
 - **THEN** o navegador é redirecionado para `https://auth-dev.ream.com.br/#/logout?url=<origem atual>&rules=<rules>`
 
 #### Scenario: Origem de retorno com HTTPS
-- **WHEN** o dev server roda com `VITE_HTTPS=true`
-- **THEN** o parâmetro `url` enviado é `https://localhost:5173`
+- **WHEN** o dev server roda com `VITE_HTTPS=true` e o navegador está no alias do provider
+- **THEN** o parâmetro `url` enviado é a origem do alias com HTTPS, por exemplo `https://localhost-dev.grupoatem.com.br:5173` no provider `atem`
 
 ### Requirement: Aliases locais por provider
 O dev server SHALL aceitar requisições nos hosts `localhost-dev.grupoatem.com.br` e `localhost-dev.ream.com.br`, abrir o navegador no alias correspondente ao provider configurado, e a aplicação SHALL tratar esses hosts como ambiente `development`.
