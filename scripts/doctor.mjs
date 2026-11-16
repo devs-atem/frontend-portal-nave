@@ -92,7 +92,10 @@ warn("VITE_HTTPS consistente com vite.config", () => {
   if (!existsSync(envPath)) return "sem .env";
   const httpsOn = /^VITE_HTTPS=true\s*$/m.test(readFileSync(envPath, "utf-8"));
   if (!httpsOn) return "HTTPS desligado (http://localhost:5173)";
-  const cfg = readFileSync(join(ROOT, "vite.config.ts"), "utf-8");
+  // Ignora comentários para que um `basicSsl()` comentado não conte como habilitado.
+  const cfg = readFileSync(join(ROOT, "vite.config.ts"), "utf-8")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^\s*\/\/.*$/gm, "");
   if (!/VITE_HTTPS/.test(cfg) || !/basicSsl\(\)/.test(cfg))
     throw new Error(
       "VITE_HTTPS=true mas vite.config.ts não habilita HTTPS",

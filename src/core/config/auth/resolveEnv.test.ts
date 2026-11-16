@@ -21,6 +21,16 @@ describe("resolveEnv sem VITE_APP_ENV", () => {
     },
   );
 
+  it.each(["localhost", "127.0.0.1"])("%s resolve para development", async (host) => {
+    const { resolveEnv } = await load(host);
+    expect(resolveEnv()).toBe("development");
+  });
+
+  it("prefixo localhost-dev. em domínio fora dos aliases não vira development", async () => {
+    const { resolveEnv } = await load("localhost-dev.example-dev.com");
+    expect(resolveEnv()).toBe("homologation");
+  });
+
   it("host -dev que não é alias local continua em homologation", async () => {
     const { resolveEnv } = await load("authcog-dev.grupoatem.com.br");
     expect(resolveEnv()).toBe("homologation");
