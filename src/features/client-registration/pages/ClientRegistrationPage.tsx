@@ -644,67 +644,64 @@ export const ClientRegistrationPage = () => {
             </div>
 
             {/* Produtos (só na edição: a API não aceita produtos na criação) */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <h4 style={sectionTitle}>Produtos vinculados</h4>
-              {!editing ? (
-                <span style={hint}>
-                  Disponível após o cadastro: a API só aceita o vínculo de
-                  produtos na edição.
-                </span>
-              ) : productsState === "loading" ? (
-                <span style={hint}>Carregando produtos…</span>
-              ) : productsState === "error" ? (
-                <span style={errorText}>
-                  Não foi possível carregar os produtos. Os vínculos atuais serão
-                  mantidos.
-                </span>
-              ) : (
-                <>
-                  <span style={hint}>
-                    Vínculo cadastral (catálogo): não habilita o produto em
-                    contratos. Ao salvar, a seleção substitui todos os vínculos.
+            {editing && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <h4 style={sectionTitle}>Produtos vinculados</h4>
+                {productsState === "loading" ? (
+                  <span style={hint}>Carregando produtos…</span>
+                ) : productsState === "error" ? (
+                  <span style={errorText}>
+                    Não foi possível carregar os produtos. Os vínculos atuais serão
+                    mantidos.
                   </span>
-                  <Input
-                    value={productSearch}
-                    onChange={(e) => setProductSearch(e.target.value)}
-                    placeholder="Buscar produto por nome ou código SAP"
-                    disabled={saving}
-                  />
-                  <div
-                    style={{
-                      maxHeight: 180,
-                      overflowY: "auto",
-                      border: "1px solid #E2E6EE",
-                      borderRadius: 8,
-                      padding: 8,
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 6,
-                    }}
-                  >
-                    {visibleProducts.length === 0 ? (
-                      <span style={hint}>Nenhum produto encontrado.</span>
-                    ) : (
-                      visibleProducts.map((p) => (
-                        <label
-                          key={p.id}
-                          style={{ ...label, flexDirection: "row", alignItems: "center", gap: 8, fontWeight: 400 }}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={productIds.includes(p.id)}
-                            onChange={() => toggleProduct(p.id)}
-                            disabled={saving}
-                          />
-                          {p.name} ({p.sapCode})
-                        </label>
-                      ))
-                    )}
-                  </div>
-                  <span style={hint}>{productIds.length} produto(s) selecionado(s).</span>
-                </>
-              )}
-            </div>
+                ) : (
+                  <>
+                    <span style={hint}>
+                      Vínculo cadastral (catálogo): não habilita o produto em
+                      contratos. Ao salvar, a seleção substitui todos os vínculos.
+                    </span>
+                    <Input
+                      value={productSearch}
+                      onChange={(e) => setProductSearch(e.target.value)}
+                      placeholder="Buscar produto por nome ou código SAP"
+                      disabled={saving}
+                    />
+                    <div
+                      style={{
+                        maxHeight: 180,
+                        overflowY: "auto",
+                        border: "1px solid #E2E6EE",
+                        borderRadius: 8,
+                        padding: 8,
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 6,
+                      }}
+                    >
+                      {visibleProducts.length === 0 ? (
+                        <span style={hint}>Nenhum produto encontrado.</span>
+                      ) : (
+                        visibleProducts.map((p) => (
+                          <label
+                            key={p.id}
+                            style={{ ...label, flexDirection: "row", alignItems: "center", gap: 8, fontWeight: 400 }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={productIds.includes(p.id)}
+                              onChange={() => toggleProduct(p.id)}
+                              disabled={saving}
+                            />
+                            {p.name} ({p.sapCode})
+                          </label>
+                        ))
+                      )}
+                    </div>
+                    <span style={hint}>{productIds.length} produto(s) selecionado(s).</span>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </Modal.Body>
         <Modal.Footer>
