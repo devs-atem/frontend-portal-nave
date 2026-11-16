@@ -30,7 +30,7 @@ O login hospedado só aceita a origem `https://localhost-dev.<domínio>`. Para r
 2. Adicione o alias do seu provider ao `/etc/hosts`:
 
    ```
-   127.0.0.1 localhost-dev.grupoatem.com.br   # VITE_AUTH_PROVIDER=atem
+   127.0.0.1 portalnave-localhost-dev.grupoatem.com.br   # VITE_AUTH_PROVIDER=atem
    127.0.0.1 localhost-dev.ream.com.br        # VITE_AUTH_PROVIDER=ream
    ```
 
@@ -441,10 +441,10 @@ Vem só com "Home". Rode `yarn generate module` pra criar o primeiro módulo de 
 **Como testo logout em dev?**
 Em dev, `loginSpa.url.development` aponta pro SPA de login hospedado (`authcog-dev.grupoatem.com.br` no preset Atem, `auth-dev.ream.com.br` no Ream). O logout redireciona pra lá com `url=<origem do dev server>`; não precisa rodar o SPA de login localmente. Com `VITE_HTTPS=true` o navegador mostra aviso de certificado autoassinado — aceite uma vez.
 
-Os SPAs de login hospedados esperam a origem `localhost-dev.grupoatem.com.br` (Atem) ou `localhost-dev.ream.com.br` (Ream). Adicione ao `/etc/hosts`:
+Os SPAs de login hospedados esperam a origem `portalnave-localhost-dev.grupoatem.com.br` (Atem) ou `localhost-dev.ream.com.br` (Ream). Adicione ao `/etc/hosts`:
 
 ```
-127.0.0.1 localhost-dev.grupoatem.com.br
+127.0.0.1 portalnave-localhost-dev.grupoatem.com.br
 127.0.0.1 localhost-dev.ream.com.br
 ```
 

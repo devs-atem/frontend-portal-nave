@@ -13,7 +13,7 @@ describe("resolveEnv sem VITE_APP_ENV", () => {
     vi.unstubAllGlobals();
   });
 
-  it.each(["localhost-dev.grupoatem.com.br", "localhost-dev.ream.com.br"])(
+  it.each(["portalnave-localhost-dev.grupoatem.com.br", "localhost-dev.ream.com.br"])(
     "%s resolve para development",
     async (host) => {
       const { resolveEnv } = await load(host);

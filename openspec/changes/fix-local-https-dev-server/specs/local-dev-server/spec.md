@@ -46,13 +46,13 @@ Em desenvolvimento, o redirect de logout SHALL apontar para o SPA de login hospe
 
 #### Scenario: Origem de retorno com HTTPS
 - **WHEN** o dev server roda com `VITE_HTTPS=true` e o navegador está no alias do provider
-- **THEN** o parâmetro `url` enviado é a origem do alias com HTTPS, por exemplo `https://localhost-dev.grupoatem.com.br:5173` no provider `atem`
+- **THEN** o parâmetro `url` enviado é a origem do alias com HTTPS, por exemplo `https://portalnave-localhost-dev.grupoatem.com.br:5173` no provider `atem`
 
 ### Requirement: Aliases locais por provider
-O dev server SHALL aceitar requisições nos hosts `localhost-dev.grupoatem.com.br` e `localhost-dev.ream.com.br`, abrir o navegador no alias correspondente ao provider configurado, e a aplicação SHALL tratar esses hosts como ambiente `development`.
+O dev server SHALL aceitar requisições nos hosts `portalnave-localhost-dev.grupoatem.com.br` e `localhost-dev.ream.com.br`, abrir o navegador no alias correspondente ao provider configurado, e a aplicação SHALL tratar esses hosts como ambiente `development`.
 
 #### Scenario: Acesso pelo alias
-- **WHEN** o alias aponta para 127.0.0.1 e o usuário acessa `https://localhost-dev.grupoatem.com.br:5173`
+- **WHEN** o alias aponta para 127.0.0.1 e o usuário acessa `https://portalnave-localhost-dev.grupoatem.com.br:5173`
 - **THEN** a aplicação responde normalmente, sem bloqueio de host
 
 #### Scenario: Ambiente derivado do alias

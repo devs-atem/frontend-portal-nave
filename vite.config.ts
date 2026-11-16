@@ -9,7 +9,7 @@ export default defineConfig(({ mode }) => {
 
   // Aliases locais (127.0.0.1 em /etc/hosts) liberados pelos SPAs de auth hospedados.
   const devAliases = {
-    atem: "localhost-dev.grupoatem.com.br",
+    atem: "portalnave-localhost-dev.grupoatem.com.br",
     ream: "localhost-dev.ream.com.br",
   } as const;
   const provider = env.VITE_AUTH_PROVIDER === "ream" ? "ream" : "atem";

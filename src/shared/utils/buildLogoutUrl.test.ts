@@ -16,7 +16,7 @@ describe("buildLogoutUrl (development)", () => {
 
   // Origem real do navegador: o Vite abre no alias do provider (https://localhost-dev.<domínio>:5173).
   it.each([
-    ["atem", "https://authcog-dev.grupoatem.com.br/#/logout", "https://localhost-dev.grupoatem.com.br:5173"],
+    ["atem", "https://authcog-dev.grupoatem.com.br/#/logout", "https://portalnave-localhost-dev.grupoatem.com.br:5173"],
     ["ream", "https://auth-dev.ream.com.br/#/logout", "https://localhost-dev.ream.com.br:5173"],
   ] as const)("provider %s aponta para o SPA de login hospedado", async (provider, base, origin) => {
     vi.stubGlobal("location", { ...window.location, origin });
