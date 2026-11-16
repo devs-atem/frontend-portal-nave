@@ -30,3 +30,7 @@ Hoje `vite.config.ts` fixa `port: 5173`, `strictPort: true`, sem `https`. `VITE_
 - [Navegador alerta certificado autoassinado] → documentar como aceitar o aviso ou migrar para mkcert.
 - [SPA de login hospedado precisa aceitar `https://localhost:5173` como URL de retorno] → confirmado pelo time como aceito; se mudar, ajuste é no lado do SPA de login (dependência externa).
 - [Nova dependência] → versão fixa em `devDependencies`.
+
+## Porta dinâmica
+
+A porta padrão continua `5173` com `strictPort`, mas pode ser sobrescrita por `--port <porta>`. Como a URL de `open` era montada na config com `5173` fixo, um plugin em `configResolved` passa a defini-la com `config.server.port`, que já inclui o valor da CLI.

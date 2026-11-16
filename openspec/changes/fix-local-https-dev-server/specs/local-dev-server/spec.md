@@ -15,8 +15,19 @@ O dev server SHALL servir a aplicação via HTTPS em `https://localhost:<porta>`
 - **WHEN** `VITE_HTTPS` está ausente ou diferente de `true`
 - **THEN** a aplicação responde em `http://localhost:5173`
 
-### Requirement: Porta do dev server é única e documentada
-A porta do dev server SHALL ser a mesma em configuração, README, mensagens do setup e descrição das tasks.
+### Requirement: Porta do dev server é configurável
+A porta do dev server SHALL ser `5173` por padrão e MUST poder ser alterada na inicialização com `--port <porta>`. A porta efetiva SHALL ser usada na URL de abertura do navegador. O servidor MUST falhar se a porta estiver ocupada (`strictPort`).
+
+#### Scenario: Porta padrão
+- **WHEN** o dev server é iniciado sem `--port`
+- **THEN** a aplicação responde na porta `5173`
+
+#### Scenario: Porta customizada
+- **WHEN** o dev server é iniciado com `--port 3000`
+- **THEN** a aplicação responde na porta `3000` e o navegador abre o alias do provider nessa porta
+
+### Requirement: Porta padrão é documentada
+A porta padrão do dev server SHALL ser a mesma em configuração, README, mensagens do setup e descrição das tasks.
 
 #### Scenario: Documentação consistente
 - **WHEN** o desenvolvedor lê o README, a saída do `setup` ou a descrição de `mise run dev`
@@ -50,7 +61,7 @@ O dev server SHALL aceitar requisições nos hosts `localhost-dev.grupoatem.com.
 
 #### Scenario: Navegador aberto no alias
 - **WHEN** o provider é `ream` e o dev server inicia
-- **THEN** o navegador abre `https://localhost-dev.ream.com.br:5173` (ou `http` se HTTPS estiver desligado)
+- **THEN** o navegador abre `https://localhost-dev.ream.com.br:<porta efetiva>` (ou `http` se HTTPS estiver desligado)
 
 ### Requirement: Diagnóstico de configuração
 O comando `doctor` SHALL avisar quando `VITE_HTTPS=true` mas a configuração do dev server não habilita HTTPS.

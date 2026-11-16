@@ -14,7 +14,7 @@ export default defineConfig(({ mode }) => {
   } as const;
   const provider = env.VITE_AUTH_PROVIDER === "ream" ? "ream" : "atem";
   const https = env.VITE_HTTPS === "true";
-  const openUrl = `${https ? "https" : "http"}://${devAliases[provider]}:5173`;
+  const protocol = https ? "https" : "http";
 
   return {
     plugins: [
@@ -22,13 +22,19 @@ export default defineConfig(({ mode }) => {
       tsconfigPaths(),
       // HTTPS local (certificado autoassinado) quando VITE_HTTPS=true.
       ...(https ? [basicSsl()] : []),
+      {
+        // Resolve a URL de abertura com a porta final (padrão 5173, ou --port <porta>).
+        name: "open-dev-alias",
+        configResolved(config) {
+          config.server.open = `${protocol}://${devAliases[provider]}:${config.server.port}`;
+        },
+      },
     ],
     server: {
       host: true,
       port: 5173,
       strictPort: true,
       allowedHosts: Object.values(devAliases),
-      open: openUrl,
       proxy: env.VITE_API_PROXY_TARGET
         ? {
             "/rest": {
