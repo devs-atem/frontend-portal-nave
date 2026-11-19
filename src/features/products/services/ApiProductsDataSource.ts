@@ -88,7 +88,8 @@ export class ApiProductsDataSource implements ProductsDataSource {
             const event = frame.match(/^event:\s*(.+)$/m)?.[1] ?? "message";
             const data = frame.match(/^data:\s*(.+)$/m)?.[1];
             if (!data) continue;
-            try { onEvent({ event, data: JSON.parse(data) as { sapCode?: string; clientCode?: string } }); } catch { /* descarta somente frame inválido */ }
+            const payload = parseCatalogPayload(event, data);
+            if (payload) onEvent({ event, data: payload });
           }
         }
       } catch {
@@ -147,7 +148,10 @@ export class ApiProductsDataSource implements ProductsDataSource {
     );
     return {
       client: this.toCliente(d),
-      products: uniqueProducts(d.products ?? []).map((product) => ({ ...toCatalogProduct(product), linkIsActive: product.linkIsActive ?? true })),
+      products: uniqueProducts(d.products ?? []).map((product) => ({
+        ...toCatalogProduct(product),
+        linkIsActive: requireLinkStatus(product.linkIsActive, `produto ${product.id}`),
+      })),
     };
   }
   async listAllClients(): Promise<Cliente[]> {
@@ -248,7 +252,10 @@ export class ApiProductsDataSource implements ProductsDataSource {
     for (const c of list) {
       if (seen.has(c.id)) continue;
       seen.add(c.id);
-      out.push({ ...this.toCliente(c), linkIsActive: c.linkIsActive ?? true });
+      out.push({
+        ...this.toCliente(c),
+        linkIsActive: requireLinkStatus(c.linkIsActive, `cliente ${c.id}`),
+      });
     }
     return out;
   }
@@ -261,6 +268,39 @@ export class ApiProductsDataSource implements ProductsDataSource {
       cnpj: formatCnpj(c.cnpj?.headquarters ?? ""),
     };
   }
+}
+
+type CatalogEventData = { sapCode?: string; clientCode?: string };
+
+/**
+ * Converte o `data:` de um frame SSE. Payload fora do contrato (JSON inválido
+ * ou valor que não é objeto) é descartado com `warn`, mantendo o stream vivo.
+ */
+function parseCatalogPayload(event: string, data: string): CatalogEventData | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(data);
+  } catch (error) {
+    console.warn(`[catalog-sse] frame "${event}" descartado: JSON inválido`, error);
+    return null;
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    console.warn(`[catalog-sse] frame "${event}" descartado: payload não é objeto`, parsed);
+    return null;
+  }
+  return parsed as CatalogEventData;
+}
+
+/**
+ * O mw-nave sempre envia `linkIsActive` nos vínculos do detalhe. Se faltar,
+ * falha em vez de presumir um status (presumir "ativo" pré-selecionaria um
+ * vínculo inativo na edição e o reativaria ao salvar).
+ */
+function requireLinkStatus(value: boolean | undefined, owner: string): boolean {
+  if (typeof value !== "boolean") {
+    throw new Error(`Contrato inválido: linkIsActive ausente no vínculo do ${owner}`);
+  }
+  return value;
 }
 
 function uniqueProducts(list: NestedProductResponse[]): NestedProductResponse[] {

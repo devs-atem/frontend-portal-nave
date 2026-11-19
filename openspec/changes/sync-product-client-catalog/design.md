@@ -28,6 +28,10 @@ Eventos atualizam páginas e detalhes em repouso. Se o usuário estiver editando
 
 O status independente do vínculo será alterado por uma ação explícita nos diálogos/painéis atuais e enviado pela API Nave; o stream atualiza a relação na visão oposta após o commit.
 
+### Edição de vínculos e status
+
+Os diálogos de vínculo pré-selecionam só os vínculos ativos. No mw-nave, o `PATCH` com `clientIds`/`productIds` ativa os enviados e marca os ausentes como inativos, sem apagá-los. Enviar os inativos os reativaria, então eles ficam fora do conjunto e só mudam de status pela ação explícita de ativar/desativar. O status vem sempre de `linkIsActive`; se o campo faltar no detalhe, o Portal trata como erro em vez de presumir um valor.
+
 ### Reconexão e compatibilidade
 
 Usar a infraestrutura HTTP/SSE existente e manter consultas REST como caminho inicial e fallback. Notificações repetidas são inofensivas porque invalidar uma query é idempotente.

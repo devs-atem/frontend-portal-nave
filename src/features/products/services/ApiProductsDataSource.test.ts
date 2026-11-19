@@ -48,17 +48,17 @@ const DIESEL = nestedProduct(P_DIESEL, "ÓLEO DIESEL A S10", "10460");
 const GASOLINA = nestedProduct(P_GASOLINA, "GASOLINA C COMUM", "10076");
 
 const products: ProductResponse[] = [
-  { ...DIESEL, clients: [RIO] },
-  { ...GASOLINA, clients: [SOLIMOES] },
+  { ...DIESEL, clients: [{ ...RIO, linkIsActive: true }] },
+  { ...GASOLINA, clients: [{ ...SOLIMOES, linkIsActive: true }] },
 ];
 const clients: ClientResponse[] = [
-  { ...RIO, updatedAt: TS, products: [DIESEL] },
+  { ...RIO, updatedAt: TS, products: [{ ...DIESEL, linkIsActive: true }] },
   {
     ...nestedClient(C_AMAZONAS, "Distribuidora Amazonas S.A.", "100312", "98765432000110"),
     updatedAt: TS,
     products: [],
   },
-  { ...SOLIMOES, updatedAt: TS, products: [GASOLINA] },
+  { ...SOLIMOES, updatedAt: TS, products: [{ ...GASOLINA, linkIsActive: true }] },
 ];
 
 /**
@@ -193,6 +193,39 @@ describe("ApiProductsDataSource", () => {
       const ds = new ApiProductsDataSource(http);
       await expect(ds.getClientDetail(9999)).rejects.toThrow();
       expect(get).not.toHaveBeenCalled();
+    });
+
+    it("getProductDetail repassa linkIsActive de cada cliente vinculado", async () => {
+      const get = vi.fn(async () => ({
+        ...DIESEL,
+        clients: [
+          { ...RIO, linkIsActive: true },
+          { ...SOLIMOES, linkIsActive: false },
+        ],
+      }));
+      const ds = new ApiProductsDataSource({ get } as unknown as IHttpService);
+      const d = await ds.getProductDetail(P_DIESEL);
+
+      expect(d.clients.map((c) => [c.codigo, c.linkIsActive])).toEqual([
+        ["100245", true],
+        ["100478", false],
+      ]);
+    });
+
+    it("getProductDetail rejeita quando um vínculo vem sem linkIsActive (não presume ativo)", async () => {
+      const get = vi.fn(async () => ({ ...DIESEL, clients: [RIO] }));
+      const ds = new ApiProductsDataSource({ get } as unknown as IHttpService);
+
+      await expect(ds.getProductDetail(P_DIESEL)).rejects.toThrow(/linkIsActive/);
+    });
+
+    it("getClientDetail rejeita quando um vínculo vem sem linkIsActive (não presume ativo)", async () => {
+      const { http, get } = makeHttp();
+      const ds = new ApiProductsDataSource(http);
+      const { rows } = await ds.loadClientsPage({ page: 1, limit: 10 });
+      get.mockImplementation(async () => ({ ...RIO, updatedAt: TS, products: [DIESEL] }));
+
+      await expect(ds.getClientDetail(rows[0].id)).rejects.toThrow(/linkIsActive/);
     });
 
     it("propaga erro do detalhe", async () => {

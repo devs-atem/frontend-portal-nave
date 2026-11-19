@@ -216,6 +216,10 @@ export const ProductsPage = () => {
               clientId: c.id,
               productId: row.productId,
             })),
+            // Pré-seleciona só os vínculos ATIVOS. No mw-nave o PATCH com
+            // `clientIds` não apaga os ausentes: marca `isActive=false` e
+            // reativa os enviados. Incluir os inativos aqui os reativaria ao
+            // salvar; omiti-los os mantém inativos (o vínculo não é removido).
             clientIds: d.clients.filter((c) => c.linkIsActive).map((c) => c.id),
             productIds: [] as string[],
           }))
@@ -232,6 +236,7 @@ export const ProductsPage = () => {
               productId: p.id,
             })),
             clientIds: [] as number[],
+            // Mesma regra do `clientIds` acima para o PATCH com `productIds`.
             productIds: d.products.filter((p) => p.linkIsActive).map((p) => p.id),
           }));
 
