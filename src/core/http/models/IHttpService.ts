@@ -2,6 +2,7 @@ export interface IHttpService {
   setAuthorization(token: string): void;
   setTokenExpirationStrategy(strategy: () => Promise<string | null>): void;
   getAuthorization(): string;
+  getFreshAuthorization(): Promise<string>;
 
   get<T = unknown>(path: string, params?: unknown): Promise<T>;
   post<T = unknown>(

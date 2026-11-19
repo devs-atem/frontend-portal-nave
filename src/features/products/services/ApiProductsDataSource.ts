@@ -1,4 +1,5 @@
 import type { IHttpService } from "@core/http/models/IHttpService";
+import appConfig from "@core/config/appConfig";
 import type { Cliente } from "@shared/domain";
 
 import {
@@ -61,6 +62,47 @@ export class ApiProductsDataSource implements ProductsDataSource {
 
   constructor(private readonly http: IHttpService) {}
 
+  async streamCatalog(
+    onEvent: (event: { event: string; data: { sapCode?: string; clientCode?: string } }) => void,
+    signal: AbortSignal,
+  ): Promise<void> {
+    let delay = 1000;
+    while (!signal.aborted) {
+      try {
+        const token = await this.http.getFreshAuthorization();
+        const response = await fetch(`${appConfig.api.url}/rest/products/catalog/stream`, {
+          headers: { Accept: "text/event-stream", ...(token ? { Authorization: token } : {}) }, signal,
+        });
+        if (!response.ok || !response.body) throw new Error(`Catalog SSE ${response.status}`);
+        delay = 1000;
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        while (!signal.aborted) {
+          const { value, done } = await reader.read();
+          if (done) throw new Error("Catalog SSE disconnected");
+          buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
+          const frames = buffer.split("\n\n");
+          buffer = frames.pop() ?? "";
+          for (const frame of frames) {
+            const event = frame.match(/^event:\s*(.+)$/m)?.[1] ?? "message";
+            const data = frame.match(/^data:\s*(.+)$/m)?.[1];
+            if (!data) continue;
+            try { onEvent({ event, data: JSON.parse(data) as { sapCode?: string; clientCode?: string } }); } catch { /* descarta somente frame inválido */ }
+          }
+        }
+      } catch {
+        if (signal.aborted) return;
+        await new Promise<void>((resolve) => {
+          const finish = () => { clearTimeout(timer); signal.removeEventListener("abort", finish); resolve(); };
+          const timer = setTimeout(finish, delay);
+          signal.addEventListener("abort", finish, { once: true });
+        });
+        delay = Math.min(delay * 2, 15_000);
+      }
+    }
+  }
+
   // ─── Leitura paginada ──────────────────────────────────────────────────────
 
   /** Só a listagem paginada: os vínculos NÃO são buscados aqui (ver `getProductDetail`). */
@@ -105,7 +147,7 @@ export class ApiProductsDataSource implements ProductsDataSource {
     );
     return {
       client: this.toCliente(d),
-      products: uniqueProducts(d.products ?? []).map(toCatalogProduct),
+      products: uniqueProducts(d.products ?? []).map((product) => ({ ...toCatalogProduct(product), linkIsActive: product.linkIsActive ?? true })),
     };
   }
   async listAllClients(): Promise<Cliente[]> {
@@ -135,6 +177,15 @@ export class ApiProductsDataSource implements ProductsDataSource {
     await this.http.patch<ClientResponse>(
       PRODUCTS_ENDPOINTS.clientById(uuid),
       body,
+    );
+  }
+
+  async setClientProductStatus(clientId: number, productId: string, isActive: boolean): Promise<void> {
+    const uuid = this.surrogateToUuid.get(clientId);
+    if (!uuid) throw new Error(`Cliente desconhecido: ${clientId}`);
+    await this.http.patch<ClientResponse>(
+      `${PRODUCTS_ENDPOINTS.clientById(uuid)}/products/${encodeURIComponent(productId)}/status`,
+      { isActive },
     );
   }
 
@@ -191,13 +242,13 @@ export class ApiProductsDataSource implements ProductsDataSource {
     return surrogate;
   }
 
-  private uniqueClients(list: NestedClientResponse[]): Cliente[] {
+  private uniqueClients(list: NestedClientResponse[]): Array<Cliente & { linkIsActive: boolean }> {
     const seen = new Set<string>();
-    const out: Cliente[] = [];
+    const out: Array<Cliente & { linkIsActive: boolean }> = [];
     for (const c of list) {
       if (seen.has(c.id)) continue;
       seen.add(c.id);
-      out.push(this.toCliente(c));
+      out.push({ ...this.toCliente(c), linkIsActive: c.linkIsActive ?? true });
     }
     return out;
   }
@@ -247,5 +298,6 @@ function toCatalogProduct(p: NestedProductResponse): CatalogProduct {
     name: p.name,
     sapCode: p.sapCode,
     color: colorFor(p.id),
+    ...(p.linkIsActive !== undefined ? { linkIsActive: p.linkIsActive } : {}),
   };
 }

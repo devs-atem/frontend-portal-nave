@@ -10,10 +10,13 @@ export interface CatalogProduct {
   sapCode: string;
   /** Cor representativa (hex), derivada do id. */
   color: string;
+  /** Status somente do vínculo produto-cliente quando vier de detalhe. */
+  linkIsActive?: boolean;
 }
 
 /** Vínculo N:N entre produto e cliente. */
 export interface ProductClientLink {
   productId: string;
   clientId: number;
+  linkIsActive: boolean;
 }

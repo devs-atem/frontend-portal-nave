@@ -28,6 +28,8 @@ export interface NestedClientResponse {
   bp: string;
   cnpj: ClientCnpj;
   isActive: boolean;
+  /** Status do vínculo deste cliente com o produto pai. */
+  linkIsActive?: boolean;
   createdAt: string;
 }
 
@@ -38,6 +40,8 @@ export interface NestedProductResponse {
   name: string;
   createdAt: string;
   updatedAt: string;
+  /** Status do vínculo deste produto com o cliente pai. */
+  linkIsActive?: boolean;
 }
 
 /**

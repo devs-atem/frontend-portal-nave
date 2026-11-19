@@ -37,13 +37,13 @@ export interface PagedResult<T> {
 /** Produto da página com seus clientes vinculados. */
 export interface ProductWithClients {
   product: CatalogProduct;
-  clients: Cliente[];
+  clients: Array<Cliente & { linkIsActive: boolean }>;
 }
 
 /** Cliente da página com seus produtos vinculados. */
 export interface ClientWithProducts {
   client: Cliente;
-  products: CatalogProduct[];
+  products: Array<CatalogProduct & { linkIsActive: boolean }>;
 }
 
 /**
@@ -89,6 +89,9 @@ export interface ProductsDataSource {
    * (`PATCH /rest/clients/:id` com `productIds`). `[]` desvincula todos.
    */
   updateClientProducts(clientId: number, productIds: string[]): Promise<void>;
+  setClientProductStatus?(clientId: number, productId: string, isActive: boolean): Promise<void>;
+  /** Stream de mudanças no catálogo; a implementação reconecta até o abort. */
+  streamCatalog?(onEvent: (event: { event: string; data: { sapCode?: string; clientCode?: string } }) => void, signal: AbortSignal): Promise<void>;
 
   /** Traduz o id numérico substituto do cliente para o UUID real. */
   clientUuidOf(clientId: number): string | undefined;

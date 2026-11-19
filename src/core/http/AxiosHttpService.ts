@@ -13,6 +13,7 @@ const ACCESS_DENIED_PATH = "/access-denied";
 export default class AxiosHttpService implements IHttpService {
   private readonly http: AxiosInstance;
   private readonly inFlightGets = new Map<string, Promise<unknown>>();
+  private tokenExpirationStrategy?: () => Promise<string | null>;
 
   constructor() {
     this.http = Axios.create({
@@ -29,7 +30,14 @@ export default class AxiosHttpService implements IHttpService {
     return String(this.http.defaults.headers.common.Authorization ?? "");
   }
 
+  async getFreshAuthorization(): Promise<string> {
+    const newToken = await this.tokenExpirationStrategy?.();
+    if (newToken) this.setAuthorization(newToken);
+    return this.getAuthorization();
+  }
+
   setTokenExpirationStrategy(strategy: () => Promise<string | null>): void {
+    this.tokenExpirationStrategy = strategy;
     this.http.interceptors.request.clear();
     this.http.interceptors.request.use(async (config) => {
       const newToken = await strategy();
