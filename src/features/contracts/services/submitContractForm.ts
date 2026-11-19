@@ -38,6 +38,9 @@ export async function submitContractForm(
   { mode, id, form, attachment }: SubmitContractFormInput,
   { contracts, files, onIdentifiers }: SubmitContractFormDeps,
 ): Promise<SubmitContractFormResult | null> {
+  // Valida o destino antes do upload: sem `id`, edição e revisão não têm onde gravar e o arquivo temporário ficaria sem uso.
+  if (mode !== "create" && !id) return null;
+
   try {
     const uploaded = attachment && mode !== "revision" ? await files.upload(attachment) : null;
 

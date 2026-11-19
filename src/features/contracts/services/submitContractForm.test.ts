@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import AppError from "@shared/utils/appError";
-import type { ContractResponse } from "./contract";
+import type { ContractResponse, NextIdentifiers } from "./contract";
+import type { IContractsService } from "./ContractsService";
+import type { IFilesService } from "./FilesService";
 import { emptyContractForm, emptyItem, type ContractForm } from "./contractRules";
 import {
   attachmentFailedMessage,
@@ -43,123 +45,118 @@ const form = (): ContractForm => ({
 
 const file = new File(["x"], "contrato.pdf", { type: "application/pdf" });
 
-function deps(over: Partial<SubmitContractFormDeps> = {}) {
+function deps() {
   const order: string[] = [];
-  const base = {
-    contracts: {
-      create: vi.fn(async () => (order.push("create"), saved())),
-      update: vi.fn(async () => (order.push("update"), saved())),
-      createRevision: vi.fn(async () => (order.push("createRevision"), saved())),
-      nextIdentifiers: vi.fn(async () => ({
-        contractNumber: "000002",
-        internalCode: "SAP-PENDENTE-000002",
-      })),
-    },
-    files: {
-      upload: vi.fn(
-        async () => (order.push("upload"), { key: "k-1", originalName: "contrato.pdf" }),
-      ),
-      attachToContract: vi.fn(async () => (order.push("attach"), [])),
-    },
-    onIdentifiers: vi.fn(),
+  const contracts = {
+    create: vi.fn<IContractsService["create"]>(async () => (order.push("create"), saved())),
+    update: vi.fn<IContractsService["update"]>(async () => (order.push("update"), saved())),
+    createRevision: vi.fn<IContractsService["createRevision"]>(
+      async () => (order.push("createRevision"), saved()),
+    ),
+    nextIdentifiers: vi.fn<IContractsService["nextIdentifiers"]>(async () => ({
+      contractNumber: "000002",
+      internalCode: "SAP-PENDENTE-000002",
+    })),
   };
-  return { order, d: { ...base, ...over } as unknown as SubmitContractFormDeps, base };
+  const files = {
+    upload: vi.fn<IFilesService["upload"]>(
+      async () => (order.push("upload"), { key: "k-1", originalName: "contrato.pdf" }),
+    ),
+    attachToContract: vi.fn<IFilesService["attachToContract"]>(
+      async () => (order.push("attach"), []),
+    ),
+  };
+  const onIdentifiers = vi.fn<(next: NextIdentifiers) => void>();
+  const d: SubmitContractFormDeps = { contracts, files, onIdentifiers };
+  return { order, d, contracts, files, onIdentifiers };
 }
 
 afterEach(() => vi.restoreAllMocks());
 
 describe("submitContractForm", () => {
   it("sem anexo: não envia arquivo nem confirma anexo", async () => {
-    const { d, base } = deps();
+    const { d, files } = deps();
     const result = await submitContractForm({ mode: "create", form: form(), attachment: null }, d);
-    expect(base.files.upload).not.toHaveBeenCalled();
-    expect(base.files.attachToContract).not.toHaveBeenCalled();
+    expect(files.upload).not.toHaveBeenCalled();
+    expect(files.attachToContract).not.toHaveBeenCalled();
     expect(result).toMatchObject({ contractId: "c-1", attachmentFailed: false });
   });
 
   it("com anexo: envia o arquivo, cria o contrato e confirma o anexo, nessa ordem", async () => {
-    const { d, base, order } = deps();
+    const { d, files, order } = deps();
     const result = await submitContractForm({ mode: "create", form: form(), attachment: file }, d);
     expect(order).toEqual(["upload", "create", "attach"]);
-    expect(base.files.attachToContract).toHaveBeenCalledWith("c-1", ["k-1"]);
+    expect(files.attachToContract).toHaveBeenCalledWith("c-1", ["k-1"]);
     expect(result?.attachmentFailed).toBe(false);
   });
 
   it("falha ao confirmar o anexo: o contrato fica salvo, sinaliza e loga o erro original", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const boom = new Error("S3 indisponível");
-    const { d } = deps();
-    (d.files.attachToContract as ReturnType<typeof vi.fn>).mockRejectedValueOnce(boom);
+    const { d, files } = deps();
+    files.attachToContract.mockRejectedValueOnce(boom);
     const result = await submitContractForm({ mode: "create", form: form(), attachment: file }, d);
     expect(result).toMatchObject({ contractId: "c-1", attachmentFailed: true });
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("anexo"), boom);
   });
 
   it("falha no envio do arquivo: não cria o contrato e propaga o erro", async () => {
-    const { d, base } = deps();
-    (d.files.upload as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-      new AppError("Tipo não permitido", "error", "x", 400),
-    );
+    const { d, contracts, files } = deps();
+    files.upload.mockRejectedValueOnce(new AppError("Tipo não permitido", "error", "x", 400));
     await expect(
       submitContractForm({ mode: "create", form: form(), attachment: file }, d),
     ).rejects.toThrow("Tipo não permitido");
-    expect(base.contracts.create).not.toHaveBeenCalled();
-    expect(base.files.attachToContract).not.toHaveBeenCalled();
+    expect(contracts.create).not.toHaveBeenCalled();
+    expect(files.attachToContract).not.toHaveBeenCalled();
   });
 
   it("409 na criação: busca outro número sugerido e propaga o erro", async () => {
-    const { d, base } = deps();
-    (d.contracts.create as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+    const { d, contracts, onIdentifiers } = deps();
+    contracts.create.mockRejectedValueOnce(
       new AppError("Contract identity already exists", "error", "x", 409),
     );
     await expect(
       submitContractForm({ mode: "create", form: form(), attachment: null }, d),
     ).rejects.toThrow(/identity/);
     await vi.waitFor(() =>
-      expect(base.onIdentifiers).toHaveBeenCalledWith({
+      expect(onIdentifiers).toHaveBeenCalledWith({
         contractNumber: "000002",
         internalCode: "SAP-PENDENTE-000002",
       }),
     );
-    expect(base.contracts.nextIdentifiers).toHaveBeenCalledTimes(1);
+    expect(contracts.nextIdentifiers).toHaveBeenCalledTimes(1);
   });
 
   it("409 com falha ao atualizar o número: loga e não esconde o erro principal", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    const { d, base } = deps();
-    (d.contracts.create as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-      new AppError("conflito", "error", "x", 409),
-    );
-    (d.contracts.nextIdentifiers as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-      new Error("rede"),
-    );
+    const { d, contracts, onIdentifiers } = deps();
+    contracts.create.mockRejectedValueOnce(new AppError("conflito", "error", "x", 409));
+    contracts.nextIdentifiers.mockRejectedValueOnce(new Error("rede"));
     await expect(
       submitContractForm({ mode: "create", form: form(), attachment: null }, d),
     ).rejects.toThrow("conflito");
     await vi.waitFor(() => expect(warn).toHaveBeenCalled());
-    expect(base.onIdentifiers).not.toHaveBeenCalled();
+    expect(onIdentifiers).not.toHaveBeenCalled();
   });
 
   it("409 fora da criação não pede novo número", async () => {
-    const { d, base } = deps();
-    (d.contracts.update as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-      new AppError("conflito", "error", "x", 409),
-    );
+    const { d, contracts } = deps();
+    contracts.update.mockRejectedValueOnce(new AppError("conflito", "error", "x", 409));
     await expect(
       submitContractForm({ mode: "edit", id: "c-1", form: form(), attachment: null }, d),
     ).rejects.toThrow("conflito");
-    expect(base.contracts.nextIdentifiers).not.toHaveBeenCalled();
+    expect(contracts.nextIdentifiers).not.toHaveBeenCalled();
   });
 
   it("modo revision: não faz upload e cria a revisão com a justificativa sem espaços", async () => {
-    const { d, base } = deps();
+    const { d, contracts, files } = deps();
     const result = await submitContractForm(
       { mode: "revision", id: "c-1", form: form(), attachment: file },
       d,
     );
-    expect(base.files.upload).not.toHaveBeenCalled();
-    expect(base.files.attachToContract).not.toHaveBeenCalled();
-    expect(base.contracts.createRevision).toHaveBeenCalledWith(
+    expect(files.upload).not.toHaveBeenCalled();
+    expect(files.attachToContract).not.toHaveBeenCalled();
+    expect(contracts.createRevision).toHaveBeenCalledWith(
       "c-1",
       expect.objectContaining({ justification: "motivo" }),
     );
@@ -167,21 +164,21 @@ describe("submitContractForm", () => {
   });
 
   it("modo edit: atualiza o rascunho e aceita anexo", async () => {
-    const { d, base, order } = deps();
+    const { d, contracts, order } = deps();
     await submitContractForm({ mode: "edit", id: "c-1", form: form(), attachment: file }, d);
     expect(order).toEqual(["upload", "update", "attach"]);
-    expect(base.contracts.update).toHaveBeenCalledWith(
+    expect(contracts.update).toHaveBeenCalledWith(
       "c-1",
       expect.objectContaining({ baseCode: "C001" }),
     );
   });
 
   it("edit/revision sem id não envia nada", async () => {
-    const { d, base } = deps();
+    const { d, contracts } = deps();
     expect(
       await submitContractForm({ mode: "edit", form: form(), attachment: null }, d),
     ).toBeNull();
-    expect(base.contracts.update).not.toHaveBeenCalled();
+    expect(contracts.update).not.toHaveBeenCalled();
   });
 });
 
