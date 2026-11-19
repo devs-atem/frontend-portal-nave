@@ -173,12 +173,23 @@ describe("submitContractForm", () => {
     );
   });
 
-  it("edit/revision sem id não envia nada", async () => {
-    const { d, contracts } = deps();
-    expect(
-      await submitContractForm({ mode: "edit", form: form(), attachment: null }, d),
-    ).toBeNull();
+  it("edit sem id não envia o arquivo temporário nem grava nada", async () => {
+    const { d, contracts, files } = deps();
+    const result = await submitContractForm({ mode: "edit", form: form(), attachment: file }, d);
+    expect(result).toBeNull();
+    expect(files.upload).not.toHaveBeenCalled();
     expect(contracts.update).not.toHaveBeenCalled();
+  });
+
+  it("revision sem id não grava nada", async () => {
+    const { d, contracts, files } = deps();
+    const result = await submitContractForm(
+      { mode: "revision", form: form(), attachment: file },
+      d,
+    );
+    expect(result).toBeNull();
+    expect(files.upload).not.toHaveBeenCalled();
+    expect(contracts.createRevision).not.toHaveBeenCalled();
   });
 });
 
