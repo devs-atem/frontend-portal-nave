@@ -1,0 +1,156 @@
+/* Área de envio de arquivo (arrastar e soltar ou clicar). */
+.nm-file-field {
+  --nm-file-accent: var(--atem-color-action-primary, #0d265e);
+  --nm-file-accent-soft: color-mix(in srgb, var(--nm-file-accent) 35%, #ffffff);
+  container-type: inline-size;
+  position: relative;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+  min-height: 129px;
+  padding: 16px 20px;
+  overflow: hidden;
+  border: 1.5px dashed var(--nm-file-accent-soft);
+  border-radius: 12px;
+  background: transparent;
+  text-align: center;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background-color 0.15s;
+}
+
+.nm-file-field:hover,
+.nm-file-field:focus-visible,
+.nm-file-field--dragging {
+  border-color: var(--nm-file-accent);
+  background: transparent;
+  outline: none;
+}
+
+.nm-file-field--error {
+  border-color: #b42f2f;
+}
+
+.nm-file-field--disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* O input nativo fica fora da tela; o clique/arraste é tratado pela área. */
+.nm-file-field__native {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.nm-file-field__icon {
+  color: var(--nm-file-accent);
+}
+
+.nm-file-field__title {
+  position: relative;
+  z-index: 1;
+  font-size: 15px;
+  font-weight: 700;
+  color: #0d265e;
+}
+
+.nm-file-field__subtitle {
+  position: relative;
+  z-index: 1;
+  font-size: 13px;
+  font-weight: 400;
+  color: #3d4556;
+}
+
+.nm-file-field__link {
+  color: var(--nm-file-accent);
+  text-decoration: underline;
+  font-weight: 500;
+}
+
+.nm-file-field__hint {
+  position: relative;
+  z-index: 1;
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 400;
+  color: #5b6475;
+}
+
+/* Ilustração decorativa; some quando a área fica estreita. */
+.nm-file-field__art {
+  position: absolute;
+  right: -6px;
+  bottom: -10px;
+  width: 110px;
+  height: auto;
+  pointer-events: none;
+}
+
+@container (max-width: 380px) {
+  .nm-file-field__art {
+    display: none;
+  }
+}
+
+/* Arquivo selecionado. */
+.nm-file-field--filled {
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 12px;
+  text-align: left;
+  border-style: solid;
+  cursor: default;
+  min-height: 72px;
+}
+
+.nm-file-field__file {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.nm-file-field__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 600;
+  color: #0d265e;
+}
+
+.nm-file-field__size {
+  font-size: 12px;
+  font-weight: 400;
+  color: #5b6475;
+}
+
+.nm-file-field__clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #5b6475;
+  cursor: pointer;
+}
+
+.nm-file-field__clear:hover:not(:disabled) {
+  color: #b42f2f;
+  background: #fff;
+}
+
+.nm-file-field__clear:disabled {
+  cursor: not-allowed;
+}

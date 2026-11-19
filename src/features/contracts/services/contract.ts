@@ -74,8 +74,8 @@ export const CONTRACT_ACTION_LABEL: Record<ContractAction, string> = {
  * PENDÊNCIA com negócio/supervisório: não há lista oficial nem catálogo; o back
  * só exige string não vazia e compara com o `movementTypeCode` enviado pelo
  * supervisório (código diferente => UNAUTHORIZED_MOVEMENT_TYPE). Esta lista
- * fixa só vale se o supervisório usar exatamente estes códigos; por isso o
- * editor também aceita códigos adicionais digitados.
+ * fixa só vale se o supervisório usar exatamente estes códigos;
+ * código fora da lista não é mais aceito pelo editor (HRZ-373).
  */
 export const MOVEMENT_TYPE_CODES = ["ENTRADA", "SAIDA"] as const;
 
@@ -86,10 +86,8 @@ export interface ContractItemInput {
   productId: string;
   /** Deve ser igual ao `sapCode` do produto. */
   productCode: string;
-  customerProductCode?: string;
-  customerProductDescription?: string;
-  poolId: string;
-  accountingMeasure: AccountingMeasure;
+  /** Fixa em GSV (HRZ-373); `poolId` e dados do cliente não são enviados. */
+  accountingMeasure: "GSV";
   reservedCapacity: string;
   maximumCapacity: string;
   minimumQuota?: string;
@@ -109,8 +107,13 @@ export interface RevisionInput {
   items: ContractItemInput[];
 }
 
-export interface ContractItemResponse extends ContractItemInput {
+/** Item como a API devolve: pode trazer pool, dados do cliente e outra medida (contratos antigos). */
+export interface ContractItemResponse extends Omit<ContractItemInput, "accountingMeasure"> {
   id: string;
+  accountingMeasure: AccountingMeasure;
+  poolId?: string;
+  customerProductCode?: string;
+  customerProductDescription?: string;
 }
 
 export interface RevisionResponse {
@@ -126,16 +129,29 @@ export interface RevisionResponse {
 
 // ─── Contrato ────────────────────────────────────────────────────────────────
 
+/**
+ * Número do contrato e código interno são gerados pelo backend; depositante e
+ * pool assumem o padrão do sistema. `revision` é opcional (itens entram na edição).
+ */
 export interface CreateContractRequest {
-  internalCode: string;
-  contractNumber: string;
-  /** Opcional por enquanto: omitido quando vazio. */
-  ownerId?: string;
-  source?: string;
-  baseCode?: string;
+  source: string;
+  baseCode: string;
   effectiveFrom: string;
   effectiveTo?: string | null;
-  revision: RevisionInput;
+  revision?: RevisionInput;
+}
+
+/** `GET /contracts/next-identifiers`: sugestão para exibição (não reserva o número). */
+export interface NextIdentifiers {
+  contractNumber: string;
+  internalCode: string;
+}
+
+export interface AttachmentResponse {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  size: number;
 }
 
 /** `PATCH /contracts/:id` é substituição completa do rascunho. */
@@ -150,6 +166,9 @@ export interface ContractActionRequest {
   justification?: string;
   stockDeclaration?: StockDeclaration;
 }
+
+/** `internalCode` do depositante padrão do sistema (placeholder, sem dados reais). */
+export const DEFAULT_OWNER_INTERNAL_CODE = "DEFAULT";
 
 export interface OwnerSummary {
   id: string;
@@ -175,6 +194,7 @@ export interface ContractResponse {
   currentRevisionId?: string;
   currentRevision?: RevisionResponse;
   revisions?: RevisionResponse[];
+  attachments?: AttachmentResponse[];
   createdAt?: string;
   updatedAt?: string;
 }
@@ -279,6 +299,10 @@ const enc = encodeURIComponent;
 
 export const CONTRACTS_ENDPOINTS = {
   root: `${REST_PREFIX}/contracts`,
+  nextIdentifiers: `${REST_PREFIX}/contracts/next-identifiers`,
+  files: `${REST_PREFIX}/files`,
+  attachments: `${REST_PREFIX}/attachments`,
+  attachmentDownload: (id: string): string => `${REST_PREFIX}/attachments/${enc(id)}/download`,
   byId: (id: string): string => `${REST_PREFIX}/contracts/${enc(id)}`,
   action: (id: string, action: ContractAction): string =>
     `${REST_PREFIX}/contracts/${enc(id)}/${action}`,
