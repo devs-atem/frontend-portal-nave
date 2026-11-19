@@ -22,8 +22,7 @@ describe("activeLinkIds", () => {
   it("salvar sem alterações não envia o vínculo inativo, então ele não é reativado nem removido", () => {
     const payload = activeLinkIds(links);
     expect(payload).not.toContain("c2");
-    // O vínculo inativo continua na lista exibida (com status inativo); só não entra na substituição.
-    expect(links.find((link) => link.id === "c2")).toEqual({ id: "c2", linkIsActive: false });
+    // O efeito no salvamento (payload do PATCH) é coberto em ProductsPage.links.test.tsx.
   });
 
   it("funciona com ids numéricos (clientes) e lista vazia", () => {
