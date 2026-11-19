@@ -22,6 +22,7 @@ import {
   ProductClientsDialog,
   ProductFormDialog,
 } from "./ProductDialogs";
+import { activeLinkIds } from "./linkSelection";
 import "./ProductsPage.css";
 
 type View = "product" | "client";
@@ -216,11 +217,8 @@ export const ProductsPage = () => {
               clientId: c.id,
               productId: row.productId,
             })),
-            // Pré-seleciona só os vínculos ATIVOS. No mw-nave o PATCH com
-            // `clientIds` não apaga os ausentes: marca `isActive=false` e
-            // reativa os enviados. Incluir os inativos aqui os reativaria ao
-            // salvar; omiti-los os mantém inativos (o vínculo não é removido).
-            clientIds: d.clients.filter((c) => c.linkIsActive).map((c) => c.id),
+            // Só vínculos ativos: o PATCH do mw-nave mantém os omitidos como inativos (ver activeLinkIds).
+            clientIds: activeLinkIds(d.clients),
             productIds: [] as string[],
           }))
         : svc.getClientDetail(row.clientId as number).then((d) => ({
@@ -236,8 +234,7 @@ export const ProductsPage = () => {
               productId: p.id,
             })),
             clientIds: [] as number[],
-            // Mesma regra do `clientIds` acima para o PATCH com `productIds`.
-            productIds: d.products.filter((p) => p.linkIsActive).map((p) => p.id),
+            productIds: activeLinkIds(d.products),
           }));
 
     run
