@@ -22,6 +22,7 @@ import {
   ProductClientsDialog,
   ProductFormDialog,
 } from "./ProductDialogs";
+import { activeLinkIds } from "./linkSelection";
 import "./ProductsPage.css";
 
 type View = "product" | "client";
@@ -58,6 +59,10 @@ interface LinkedItem {
   title: string;
   sub: string;
   code: string;
+  /** Status do vínculo produto-cliente, sem afetar status do produto/cliente. */
+  linkIsActive: boolean;
+  clientId?: number;
+  productId?: string;
 }
 
 /** Estado do detalhe (vínculos) do item aberto no painel lateral. */
@@ -115,6 +120,8 @@ export const ProductsPage = () => {
   const [error, setError] = useState<Error | null>(null);
   // Incrementado para reexecutar a carga da página (retry e pós-mutação).
   const [reloadToken, setReloadToken] = useState(0);
+  // Latest selection and detail loader, read by the SSE callback without re-subscribing.
+  const latest = useRef<{ selected: Row | null; openRow: (row: Row) => void } | null>(null);
 
   const page = view === "product" ? productPage : clientPage;
   const setPage = view === "product" ? setProductPage : setClientPage;
@@ -161,6 +168,23 @@ export const ProductsPage = () => {
     };
   }, [svc, view, page, reloadToken]);
 
+  // SSE notifica mudanças originadas em qualquer uma das APIs. Recarregamos a
+  // página visível e o detalhe aberto, sem controlar valores de formulários.
+  useEffect(() => {
+    const streamCatalog = svc.streamCatalog;
+    if (!streamCatalog) return;
+    const controller = new AbortController();
+    void streamCatalog((event) => {
+      const currentSelected = latest.current?.selected ?? null;
+      const matchesSelected =
+        (currentSelected?.kind === "product" && (!event.data.sapCode || event.data.sapCode === currentSelected.code)) ||
+        (currentSelected?.kind === "client" && (!event.data.clientCode || event.data.clientCode === currentSelected.code));
+      setReloadToken((value) => value + 1);
+      if (currentSelected && matchesSelected) latest.current?.openRow(currentSelected);
+    }, controller.signal);
+    return () => controller.abort();
+  }, [svc]);
+
   const retry = useCallback(() => setReloadToken((t) => t + 1), []);
 
   const closeDetail = useCallback(() => {
@@ -189,8 +213,12 @@ export const ProductsPage = () => {
               title: c.razao,
               sub: c.cnpj,
               code: c.codigo,
+              linkIsActive: c.linkIsActive,
+              clientId: c.id,
+              productId: row.productId,
             })),
-            clientIds: d.clients.map((c) => c.id),
+            // Só vínculos ativos: o PATCH do mw-nave mantém os omitidos como inativos (ver activeLinkIds).
+            clientIds: activeLinkIds(d.clients),
             productIds: [] as string[],
           }))
         : svc.getClientDetail(row.clientId as number).then((d) => ({
@@ -201,9 +229,12 @@ export const ProductsPage = () => {
               title: p.name,
               sub: "",
               code: p.sapCode,
+              linkIsActive: p.linkIsActive,
+              clientId: row.clientId,
+              productId: p.id,
             })),
             clientIds: [] as number[],
-            productIds: d.products.map((p) => p.id),
+            productIds: activeLinkIds(d.products),
           }));
 
     run
@@ -215,6 +246,21 @@ export const ProductsPage = () => {
       .catch(() => {
         if (detailRequest.current === requestId) setDetail({ status: "error" });
       });
+  };
+
+  useEffect(() => {
+    latest.current = { selected, openRow };
+  });
+
+  const handleToggleLinkStatus = async (item: LinkedItem) => {
+    if (!svc.setClientProductStatus || item.clientId === undefined || !item.productId) return;
+    try {
+      await svc.setClientProductStatus(item.clientId, item.productId, !item.linkIsActive);
+      toast.success(`Vínculo ${!item.linkIsActive ? "ativado" : "desativado"}.`);
+      if (selected) openRow(selected);
+    } catch {
+      toast.error("Não foi possível alterar o status do vínculo.");
+    }
   };
 
   const changeView = (v: View) => {
@@ -502,6 +548,7 @@ export const ProductsPage = () => {
             const c = clientOf(selected.clientId);
             if (c) void openClientProductsDialog(c);
           }}
+          onToggleLinkStatus={(item) => { void handleToggleLinkStatus(item); }}
         />
       )}
 
@@ -564,6 +611,7 @@ interface DetailsDrawerProps {
   onLinks: () => void;
   onDelete: () => void;
   onClientProducts: () => void;
+  onToggleLinkStatus: (item: LinkedItem) => void;
 }
 
 const DetailsDrawer = ({
@@ -575,6 +623,7 @@ const DetailsDrawer = ({
   onLinks,
   onDelete,
   onClientProducts,
+  onToggleLinkStatus,
 }: DetailsDrawerProps) => {
   const isProduct = row.kind === "product";
   const items = detail.status === "ready" ? detail.items : [];
@@ -684,8 +733,12 @@ const DetailsDrawer = ({
                       {c.kind === "client"
                         ? `${childSubLabel}: ${c.sub || "—"} · BP: ${c.code || "—"}`
                         : `${childSubLabel}: ${c.code || "—"}`}
+                      {` · Vínculo ${c.linkIsActive ? "ativo" : "inativo"}`}
                     </span>
                   </div>
+                  <Button size="sm" variant="outlined" onClick={() => onToggleLinkStatus(c)}>
+                    {c.linkIsActive ? "Desativar" : "Reativar"}
+                  </Button>
                 </li>
               ))}
             </ul>

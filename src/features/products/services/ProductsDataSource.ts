@@ -16,8 +16,10 @@ export interface ProductChanges {
   name?: string;
   sapCode?: string;
   /**
-   * UUIDs reais dos clientes vinculados. Substituição total: omitido = não
-   * altera; `[]` = desvincula todos.
+   * UUIDs reais dos clientes com vínculo ATIVO. Omitido = não altera. No
+   * mw-nave, os enviados ficam ativos (inclusive reativa inativos) e os
+   * ausentes ficam inativos (`isActive=false`, o vínculo não é apagado);
+   * `[]` desativa todos.
    */
   clientUuids?: string[];
 }
@@ -37,13 +39,13 @@ export interface PagedResult<T> {
 /** Produto da página com seus clientes vinculados. */
 export interface ProductWithClients {
   product: CatalogProduct;
-  clients: Cliente[];
+  clients: Array<Cliente & { linkIsActive: boolean }>;
 }
 
 /** Cliente da página com seus produtos vinculados. */
 export interface ClientWithProducts {
   client: Cliente;
-  products: CatalogProduct[];
+  products: Array<CatalogProduct & { linkIsActive: boolean }>;
 }
 
 /**
@@ -85,10 +87,15 @@ export interface ProductsDataSource {
   updateProduct(id: string, changes: ProductChanges): Promise<CatalogProduct>;
   deleteProduct(id: string): Promise<void>;
   /**
-   * Substitui TODOS os produtos vinculados a um cliente
-   * (`PATCH /rest/clients/:id` com `productIds`). `[]` desvincula todos.
+   * Define o conjunto de produtos com vínculo ATIVO do cliente
+   * (`PATCH /rest/clients/:id` com `productIds`). Os enviados ficam ativos e
+   * os ausentes ficam inativos no mw-nave (não são apagados); `[]` desativa
+   * todos.
    */
   updateClientProducts(clientId: number, productIds: string[]): Promise<void>;
+  setClientProductStatus?(clientId: number, productId: string, isActive: boolean): Promise<void>;
+  /** Stream de mudanças no catálogo; a implementação reconecta até o abort. */
+  streamCatalog?(onEvent: (event: { event: string; data: { sapCode?: string; clientCode?: string } }) => void, signal: AbortSignal): Promise<void>;
 
   /** Traduz o id numérico substituto do cliente para o UUID real. */
   clientUuidOf(clientId: number): string | undefined;
