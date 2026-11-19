@@ -98,18 +98,18 @@ export default class AxiosHttpService implements IHttpService {
     }
   }
 
-  get<T>(path: string, params?: unknown) {
+  get<T>(path: string, params?: unknown, responseType?: string) {
     // Deduplica GETs idênticos em andamento (ex.: o StrictMode do React monta
     // os efeitos duas vezes em dev). Ao concluir, a chave é liberada, então
     // um novo GET (refresh/paginação) sempre vai à rede.
-    const key = `${path}?${JSON.stringify(params ?? null)}`;
+    const key = `${path}?${JSON.stringify(params ?? null)}|${responseType ?? ""}`;
     const pending = this.inFlightGets.get(key);
     if (pending) return pending as Promise<T>;
 
     const release = () => {
       if (this.inFlightGets.get(key) === promise) this.inFlightGets.delete(key);
     };
-    const promise = this.request<T>("GET", path, undefined, params, undefined, undefined, release)
+    const promise = this.request<T>("GET", path, undefined, params, responseType, undefined, release)
       .finally(release);
     this.inFlightGets.set(key, promise);
     return promise;

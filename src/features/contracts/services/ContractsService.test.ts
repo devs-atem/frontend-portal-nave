@@ -86,6 +86,15 @@ describe("ContractsService", () => {
     expect(post).toHaveBeenNthCalledWith(2, CONTRACTS_ENDPOINTS.revisions("c1"), expect.anything());
   });
 
+  it("nextIdentifiers() consulta o endpoint de sugestão", async () => {
+    const get = vi.fn(async () => ({ contractNumber: "000001", internalCode: "SAP-PENDENTE-000001" }));
+    await expect(new ContractsService(mk({ get })).nextIdentifiers()).resolves.toEqual({
+      contractNumber: "000001",
+      internalCode: "SAP-PENDENTE-000001",
+    });
+    expect(get).toHaveBeenCalledWith(CONTRACTS_ENDPOINTS.nextIdentifiers);
+  });
+
   it("propaga AppError", async () => {
     const get = vi.fn(async () => {
       throw err(403);

@@ -1,20 +1,29 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { Button, Input, PageTitleCard, Select, Skeleton } from "@devs-atem/design-system";
+import {
+  Button,
+  Icon,
+  Input,
+  PageTitleCard,
+  Select,
+  type IconName,
+} from "@devs-atem/design-system";
 
 import { useIoC } from "@shared/hooks/useIoC";
+import { BREAKPOINTS, useMediaQuery } from "@shared/hooks/useMediaQuery";
 import { DateField } from "@shared/components/DateField";
+import { FileField } from "@shared/components/FileField";
+import { ContractFormSkeleton } from "../components/ContractFormSkeleton";
+import { SaveDraftModal } from "../components/SaveDraftModal";
 import { RevisionEditor, type ProductChoice } from "../components/RevisionEditor";
-import type {
-  BaseResponse,
-  ContractResponse,
-  OwnerOption,
-} from "../services/contract";
+import type { BaseResponse, ContractResponse, NextIdentifiers } from "../services/contract";
+import { validateAttachmentFile } from "../services/FilesService";
+import { attachmentFailedMessage, submitContractForm } from "../services/submitContractForm";
 import { contractErrorMessage, errorStatus, isStaleStateError } from "../services/contractErrors";
 import {
-  buildContractRequest,
-  buildRevisionInput,
+  dateToIso,
+  draftRevisionOf,
   emptyContractForm,
   formFromContract,
   isoToDate,
@@ -35,7 +44,11 @@ const label: CSSProperties = {
   gap: 5,
 };
 const hint: CSSProperties = { fontSize: 12, color: "#5B6475", fontWeight: 400 };
-const errorText: CSSProperties = { color: "#B42F2F", fontWeight: 400, fontSize: 12 };
+const errorText: CSSProperties = {
+  color: "#B42F2F",
+  fontWeight: 400,
+  fontSize: 12,
+};
 const section: CSSProperties = {
   background: "#FFFFFF",
   border: "1px solid #E2E6EE",
@@ -45,11 +58,38 @@ const section: CSSProperties = {
   flexDirection: "column",
   gap: 14,
 };
-const grid: CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,240px),1fr))",
-  gap: 14,
-};
+
+const SectionTitle = ({
+  icon,
+  children,
+  subtitle,
+}: {
+  icon: IconName;
+  children: string;
+  subtitle?: string;
+}) => (
+  <div style={{ display: "flex", alignItems: "center", gap: 10, color: "#0D265E" }}>
+    <span
+      style={{
+        display: "inline-flex",
+        flex: "none",
+        alignItems: "center",
+        justifyContent: "center",
+        width: 32,
+        height: 32,
+        borderRadius: 10,
+        background: "color-mix(in srgb, var(--atem-color-action-primary, #0d265e) 10%, #ffffff)",
+        color: "var(--atem-color-action-primary, #0d265e)",
+      }}
+    >
+      <Icon name={icon} size="md" aria-hidden />
+    </span>
+    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+      <strong>{children}</strong>
+      {subtitle && <span style={{ ...hint, fontSize: 13 }}>{subtitle}</span>}
+    </div>
+  </div>
+);
 
 const TITLE: Record<ContractFormMode, string> = {
   create: "Novo contrato",
@@ -61,57 +101,65 @@ export const ContractFormPage = ({ mode }: { mode: ContractFormMode }) => {
   const { id } = useParams();
   const navigate = useNavigate();
   const contracts = useIoC("contracts");
-  const owners = useIoC("owners");
   const reference = useIoC("contractsReference");
+  const files = useIoC("contractsFiles");
 
   const [form, setForm] = useState<ContractForm>(emptyContractForm());
   const [contract, setContract] = useState<ContractResponse | null>(null);
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const [ownersList, setOwnersList] = useState<OwnerOption[]>([]);
-  /** Falha ao carregar `GET /rest/owners/all` (null = carregou). */
-  const [ownersError, setOwnersError] = useState<string | null>(null);
+  /** Número e código interno sugeridos pelo backend (só na criação). */
+  const [identifiers, setIdentifiers] = useState<NextIdentifiers | null>(null);
+  const [identifiersError, setIdentifiersError] = useState<string | null>(null);
+  const [attachment, setAttachment] = useState<File | null>(null);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [bases, setBases] = useState<BaseResponse[]>([]);
   /** Falha ao carregar `GET /rest/operational-catalog/bases/all` (null = carregou). */
   const [basesError, setBasesError] = useState<string | null>(null);
   const [productChoices, setProductChoices] = useState<ProductChoice[]>([]);
-  const [ownerProductsLoading, setOwnerProductsLoading] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [ownerProductsLoading, setOwnerProductsLoading] = useState(true);
+  const [basesLoading, setBasesLoading] = useState(true);
 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const isRevision = mode === "revision";
+  const stacked = useMediaQuery(BREAKPOINTS.tablet);
   const backPath = id ? `/contratos/${id}` : "/contratos";
 
-  // ─── Catálogos dos selects: cargas INDEPENDENTES ───────────────────────────
-  // Depositantes e bases não bloqueiam um ao outro nem o formulário: uma base
-  // lenta/sem permissão não impede o select de depositantes (e vice-versa).
+  // ─── Identificadores sugeridos (somente na criação) ─────────────────────────
+  // O backend gera o número definitivo ao salvar; aqui é só exibição.
   useEffect(() => {
+    if (mode !== "create") return;
     let cancelled = false;
-    setOwnersError(null);
-    owners
-      .listOptions()
-      .then((rows) => {
-        if (!cancelled) setOwnersList(rows);
+    setIdentifiers(null);
+    setIdentifiersError(null);
+    contracts
+      .nextIdentifiers()
+      .then((v) => {
+        if (!cancelled) setIdentifiers(v);
       })
       .catch((err: unknown) => {
-        if (cancelled) return;
-        setOwnersError(
-          errorStatus(err) === 403
-            ? "Sem permissão para listar depositantes."
-            : contractErrorMessage(err, "Não foi possível carregar os depositantes."),
-        );
+        if (!cancelled) {
+          setIdentifiersError(
+            contractErrorMessage(err, "Não foi possível obter o número do contrato."),
+          );
+        }
       });
     return () => {
       cancelled = true;
     };
-  }, [owners]);
+  }, [mode, contracts]);
+
+  // ─── Catálogo de bases ─────────────────────────────────────────────────────
 
   useEffect(() => {
     let cancelled = false;
     setBasesError(null);
+    setBasesLoading(true);
     reference
       .listBases()
       .then((rows) => {
@@ -124,6 +172,9 @@ export const ContractFormPage = ({ mode }: { mode: ContractFormMode }) => {
             ? "Sem permissão para listar bases."
             : contractErrorMessage(err, "Não foi possível carregar as bases."),
         );
+      })
+      .finally(() => {
+        if (!cancelled) setBasesLoading(false);
       });
     return () => {
       cancelled = true;
@@ -150,7 +201,6 @@ export const ContractFormPage = ({ mode }: { mode: ContractFormMode }) => {
             ? formFromContract(loadedContract)
             : {
                 ...emptyContractForm(),
-                ownerId: loadedContract.ownerId,
                 source: loadedContract.source,
                 baseCode: loadedContract.baseCode,
                 effectiveFrom: isoToDate(loadedContract.effectiveFrom),
@@ -163,7 +213,8 @@ export const ContractFormPage = ({ mode }: { mode: ContractFormMode }) => {
 
     run()
       .catch((err: unknown) => {
-        if (!cancelled) setLoadError(contractErrorMessage(err, "Não foi possível carregar o contrato."));
+        if (!cancelled)
+          setLoadError(contractErrorMessage(err, "Não foi possível carregar o contrato."));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -174,27 +225,22 @@ export const ContractFormPage = ({ mode }: { mode: ContractFormMode }) => {
   }, [mode, id, contracts]);
 
   // ─── Produtos disponíveis para os itens ────────────────────────────────────
-  // Com depositante: produtos habilitados para ele (OwnerProduct). Sem
-  // depositante (campo opcional por enquanto): catálogo completo de produtos.
+  // Sem depositante no formulário: catálogo completo de produtos.
   useEffect(() => {
     let cancelled = false;
     setOwnerProductsLoading(true);
-    const request: Promise<ProductChoice[]> = form.ownerId
-      ? owners.listProducts(form.ownerId).then((rows) =>
-          rows.map((op) => ({
-            productId: op.product.id,
-            name: op.product.name,
-            sapCode: op.product.sapCode,
-            customerProductCode: op.customerProductCode,
-            customerProductDescription: op.customerProductDescription,
-          })),
-        )
-      : reference
-          .listProducts()
-          .then((rows) => rows.map((p) => ({ productId: p.id, name: p.name, sapCode: p.sapCode })));
-    request
+    reference
+      .listProducts()
       .then((rows) => {
-        if (!cancelled) setProductChoices(rows);
+        if (!cancelled) {
+          setProductChoices(
+            rows.map((p) => ({
+              productId: p.id,
+              name: p.name,
+              sapCode: p.sapCode,
+            })),
+          );
+        }
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -207,7 +253,7 @@ export const ContractFormPage = ({ mode }: { mode: ContractFormMode }) => {
     return () => {
       cancelled = true;
     };
-  }, [form.ownerId, owners, reference]);
+  }, [reference]);
 
   // ─── Edição de campos ──────────────────────────────────────────────────────
   const setField = <K extends keyof ContractForm>(k: K, v: ContractForm[K]) => {
@@ -219,32 +265,9 @@ export const ContractFormPage = ({ mode }: { mode: ContractFormMode }) => {
     });
   };
 
-  const changeOwner = (ownerId: string) => {
-    setForm((f) => ({
-      ...f,
-      ownerId,
-      // Os produtos dos itens dependem do depositante.
-      revision: { ...f.revision, items: [] },
-    }));
-    setErrors((e) => {
-      const { ownerId: _o, ...rest } = e;
-      void _o;
-      return rest;
-    });
-  };
-
   const changeBase = (key: string) => {
     const [source = "", baseCode = ""] = key.split("|");
-    setForm((f) => ({
-      ...f,
-      source,
-      baseCode,
-      // Pool e tanques dependem da base.
-      revision: {
-        ...f.revision,
-        items: f.revision.items.map((i) => ({ ...i, poolId: "", allowedTankCodes: [] })),
-      },
-    }));
+    setForm((f) => ({ ...f, source, baseCode }));
     setErrors((e) => {
       const { base: _b, ...rest } = e;
       void _b;
@@ -253,12 +276,30 @@ export const ContractFormPage = ({ mode }: { mode: ContractFormMode }) => {
   };
 
   // ─── Envio ─────────────────────────────────────────────────────────────────
-  const submit = async () => {
+  const onPickFile = (file: File | null) => {
+    setAttachment(file);
+    setAttachmentError(file ? validateAttachmentFile(file) : null);
+  };
+
+  const requestSave = () => {
+    if (mode === "create" && !identifiers) {
+      setSubmitError(identifiersError ?? "Aguarde o carregamento do número do contrato.");
+      return;
+    }
+    if (attachment) {
+      const fileError = validateAttachmentFile(attachment);
+      if (fileError) {
+        setAttachmentError(fileError);
+        return;
+      }
+    }
     const e = validateContractForm(form, {
       mode: isRevision ? "revision" : "contract",
       contractFrom: isRevision ? isoToDate(contract?.effectiveFrom) : undefined,
       contractTo: isRevision ? isoToDate(contract?.effectiveTo) || undefined : undefined,
       existingRevisions: isRevision ? contract?.revisions : undefined,
+      hadDraftItems:
+        mode === "edit" && !!contract && (draftRevisionOf(contract)?.items.length ?? 0) > 0,
     });
     setErrors(e);
     setSubmitError(null);
@@ -267,35 +308,27 @@ export const ContractFormPage = ({ mode }: { mode: ContractFormMode }) => {
       return;
     }
 
+    // Rascunhos pedem confirmação; a nova revisão (já aprovada) segue direto.
+    if (isRevision) void save();
+    else setConfirmOpen(true);
+  };
+
+  const save = async () => {
     setSaving(true);
     try {
-      let saved: ContractResponse;
-      if (mode === "create") {
-        saved = await contracts.create(buildContractRequest(form));
-        toast.success("Contrato criado em rascunho.");
-      } else if (mode === "edit" && id) {
-        saved = await contracts.update(id, buildContractRequest(form));
-        toast.success("Rascunho atualizado.");
-      } else if (id) {
-        saved = await contracts.createRevision(id, {
-          ...buildRevisionInput(form.revision),
-          justification: form.revision.justification.trim(),
-        });
-        toast.success("Nova revisão criada.");
-      } else {
-        return;
-      }
-      navigate(`/contratos/${saved?.id ?? id ?? ""}`.replace(/\/$/, ""));
+      const result = await submitContractForm(
+        { mode, id, form, attachment },
+        { contracts, files, onIdentifiers: setIdentifiers },
+      );
+      if (!result) return;
+      if (mode === "create")
+        toast.success(`Contrato ${result.contract.contractNumber} criado em rascunho.`);
+      else if (mode === "edit") toast.success("Rascunho atualizado.");
+      else toast.success("Nova revisão criada.");
+      if (result.attachmentFailed) toast.warning(attachmentFailedMessage(mode));
+      navigate(`/contratos/${result.contractId}`.replace(/\/$/, ""));
     } catch (err) {
-      const status = errorStatus(err);
       const msg = contractErrorMessage(err, "Não foi possível salvar o contrato.");
-      if (status === 409 && /identity/i.test(err instanceof Error ? err.message : "")) {
-        setErrors((x) => ({
-          ...x,
-          internalCode: "Já existe um contrato com este código ou número.",
-          contractNumber: "Já existe um contrato com este código ou número.",
-        }));
-      }
       setSubmitError(msg);
       toast.error(msg);
       if (isStaleStateError(err) && id) navigate(`/contratos/${id}`);
@@ -311,11 +344,13 @@ export const ContractFormPage = ({ mode }: { mode: ContractFormMode }) => {
     gap: 18,
   };
 
-  if (loading) {
+  // Esqueleto até o contrato (edição/revisão), os identificadores (criação), as bases e
+  // os produtos terminarem de carregar.
+  const identifiersPending = mode === "create" && !identifiers && !identifiersError;
+  if (loading || basesLoading || ownerProductsLoading || identifiersPending) {
     return (
-      <div style={pageStyle} aria-busy="true">
-        <PageTitleCard title={TITLE[mode]} subtitle="Carregando…" />
-        <Skeleton.Table rows={5} columns={3} showHeader />
+      <div style={pageStyle}>
+        <ContractFormSkeleton mode={mode} />
       </div>
     );
   }
@@ -334,130 +369,165 @@ export const ContractFormPage = ({ mode }: { mode: ContractFormMode }) => {
     );
   }
 
-  const ownerLabel = (oid: string): string => {
-    const o = ownersList.find((x) => x.id === oid);
-    return o ? `${o.internalCode} - ${o.legalName}` : contract?.owner?.legalName ?? (oid ? "Depositante atual" : "Selecione");
-  };
   const baseKey = form.source && form.baseCode ? `${form.source}|${form.baseCode}` : "";
   const baseLabel = (k: string): string => {
     const b = bases.find((x) => `${x.source}|${x.baseCode}` === k);
-    return b ? `${b.baseCode} — ${b.name}` : k ? k.split("|")[1] ?? k : "Selecione";
+    return b ? `${b.baseCode} — ${b.name}` : k ? (k.split("|")[1] ?? k) : "Selecione";
   };
-  const ownerIds = ownersList.map((o) => o.id);
-  if (form.ownerId && !ownerIds.includes(form.ownerId)) ownerIds.push(form.ownerId);
   const baseKeys = bases.map((b) => `${b.source}|${b.baseCode}`);
   if (baseKey && !baseKeys.includes(baseKey)) baseKeys.push(baseKey);
 
   return (
     <div style={pageStyle}>
       <PageTitleCard
+        variant="flat"
         title={TITLE[mode]}
         subtitle={
           isRevision
             ? `Contrato ${contract?.contractNumber ?? ""} — a revisão nasce aprovada e passa a valer na data de início`
-            : "Preencha os dados gerais e os itens da revisão. O rascunho é substituído por completo a cada salvamento."
+            : mode === "create"
+              ? "Preencha os dados gerais e os itens. A vigência dos itens acompanha a do contrato."
+              : "Preencha os dados gerais e os itens da revisão. O rascunho é substituído por completo a cada salvamento."
         }
       />
 
       {!isRevision && (
         <div style={section}>
-          <strong style={{ color: "#0D265E" }}>Dados gerais</strong>
-          <div style={grid}>
-            <label style={label}>
-              Código interno *
-              <Input
-                size="sm"
-                value={form.internalCode}
-                onChange={(e) => setField("internalCode", e.target.value)}
-                error={!!errors.internalCode}
-                disabled={saving}
-              />
-              {errors.internalCode && <span style={errorText}>{errors.internalCode}</span>}
-            </label>
-            <label style={label}>
-              Número do contrato *
-              <Input
-                size="sm"
-                value={form.contractNumber}
-                onChange={(e) => setField("contractNumber", e.target.value)}
-                error={!!errors.contractNumber}
-                disabled={saving}
-              />
-              {errors.contractNumber && <span style={errorText}>{errors.contractNumber}</span>}
-            </label>
-            <div style={label}>
-              Depositante (Owner)
-              <Select<string>
-                size="sm"
-                value={form.ownerId}
-                options={ownerIds.map((option) => ({ option }))}
-                getOptionItemLabel={ownerLabel}
-                getSelectedOptionLabel={ownerLabel}
-                getOptionKey={(v) => v || "__none"}
-                placeholder="Selecione"
-                onChange={changeOwner}
-                disabled={saving}
-              />
-              {errors.ownerId && <span style={errorText}>{errors.ownerId}</span>}
-              {ownersError ? (
-                <span style={errorText}>{ownersError}</span>
-              ) : (
-                ownersList.length === 0 && (
-                  <span style={hint}>Nenhum depositante disponível.</span>
-                )
-              )}
+          <SectionTitle
+            icon="FileText"
+            subtitle="Informe a base e a vigência do contrato e, se quiser, anexe o documento."
+          >
+            Dados gerais
+          </SectionTitle>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: stacked ? "1fr" : "minmax(0, 3fr) minmax(0, 2fr)",
+              gap: 20,
+              alignItems: "stretch",
+            }}
+          >
+            {/* Linha 1: código interno, número e base. Linha 2: início e fim da vigência. */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: stacked
+                  ? "repeat(auto-fit, minmax(min(100%, 220px), 1fr))"
+                  : "repeat(3, minmax(0, 1fr))",
+                gap: 14,
+                alignContent: "start",
+                minWidth: 0,
+              }}
+            >
+              <label style={label}>
+                Código interno
+                <Input
+                  size="sm"
+                  value={
+                    mode === "create"
+                      ? (identifiers?.internalCode ?? "")
+                      : (contract?.internalCode ?? "")
+                  }
+                  placeholder={mode === "create" && !identifiersError ? "Carregando…" : undefined}
+                  disabled
+                  readOnly
+                />
+                <span style={hint}>
+                  Gerado pelo sistema; será atualizado pela integração com o SAP.
+                </span>
+              </label>
+              <label style={label}>
+                Número do contrato
+                <Input
+                  size="sm"
+                  value={
+                    mode === "create"
+                      ? (identifiers?.contractNumber ?? "")
+                      : (contract?.contractNumber ?? "")
+                  }
+                  placeholder={mode === "create" && !identifiersError ? "Carregando…" : undefined}
+                  disabled
+                  readOnly
+                />
+                {identifiersError && <span style={errorText}>{identifiersError}</span>}
+              </label>
+              <div style={label}>
+                Base
+                <Select<string>
+                  size="sm"
+                  value={baseKey}
+                  options={baseKeys.map((option) => ({ option }))}
+                  getOptionItemLabel={baseLabel}
+                  getSelectedOptionLabel={baseLabel}
+                  getOptionKey={(v) => v || "__none"}
+                  placeholder="Selecione"
+                  onChange={changeBase}
+                  disabled={saving}
+                />
+                {errors.base && <span style={errorText}>{errors.base}</span>}
+                {basesError ? (
+                  <span style={errorText}>{basesError}</span>
+                ) : (
+                  bases.length === 0 && <span style={hint}>Nenhuma base disponível.</span>
+                )}
+              </div>
+              <div style={label}>
+                Início da vigência *
+                <DateField
+                  ariaLabel="Início da vigência"
+                  value={form.effectiveFrom}
+                  onChange={(v) => setField("effectiveFrom", v)}
+                  error={!!errors.effectiveFrom}
+                  disabled={saving}
+                />
+                {errors.effectiveFrom && <span style={errorText}>{errors.effectiveFrom}</span>}
+              </div>
+              <div style={label}>
+                Fim da vigência (vazio = indeterminado)
+                <DateField
+                  ariaLabel="Fim da vigência"
+                  value={form.effectiveTo}
+                  onChange={(v) => setField("effectiveTo", v)}
+                  error={!!errors.effectiveTo}
+                  disabled={saving}
+                  min={form.effectiveFrom || undefined}
+                  align="end"
+                />
+                {errors.effectiveTo && <span style={errorText}>{errors.effectiveTo}</span>}
+              </div>
             </div>
-            <div style={label}>
-              Base
-              <Select<string>
-                size="sm"
-                value={baseKey}
-                options={baseKeys.map((option) => ({ option }))}
-                getOptionItemLabel={baseLabel}
-                getSelectedOptionLabel={baseLabel}
-                getOptionKey={(v) => v || "__none"}
-                placeholder="Selecione"
-                onChange={changeBase}
+            {/* Coluna de anexo separada por divisória vertical (horizontal quando empilhada). */}
+            <div
+              style={{
+                ...label,
+                minWidth: 0,
+                alignContent: "start",
+                ...(stacked
+                  ? { borderTop: "1px solid #E2E6EE", paddingTop: 14 }
+                  : { borderLeft: "1px solid #E2E6EE", paddingLeft: 20 }),
+              }}
+            >
+              <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <Icon name="Paperclip" size="sm" aria-hidden />
+                Anexo do contrato (opcional)
+              </span>
+              <FileField
+                ariaLabel="Anexo do contrato"
+                accept=".pdf,.doc,.docx,.jpg,.jpeg"
+                hint="PDF, DOC, DOCX ou JPG  •  Até 20 MB"
+                value={attachment}
+                onChange={onPickFile}
+                error={!!attachmentError}
                 disabled={saving}
               />
-              {errors.base && <span style={errorText}>{errors.base}</span>}
-              {basesError ? (
-                <span style={errorText}>{basesError}</span>
-              ) : (
-                bases.length === 0 && <span style={hint}>Nenhuma base disponível.</span>
-              )}
-            </div>
-            <div style={label}>
-              Início da vigência *
-              <DateField
-                ariaLabel="Início da vigência"
-                value={form.effectiveFrom}
-                onChange={(v) => setField("effectiveFrom", v)}
-                error={!!errors.effectiveFrom}
-                disabled={saving}
-              />
-              {errors.effectiveFrom && <span style={errorText}>{errors.effectiveFrom}</span>}
-            </div>
-            <div style={label}>
-              Fim da vigência (vazio = indeterminado)
-              <DateField
-                ariaLabel="Fim da vigência"
-                value={form.effectiveTo}
-                onChange={(v) => setField("effectiveTo", v)}
-                error={!!errors.effectiveTo}
-                disabled={saving}
-                min={form.effectiveFrom || undefined}
-                align="end"
-              />
-              {errors.effectiveTo && <span style={errorText}>{errors.effectiveTo}</span>}
+              {attachmentError && <span style={errorText}>{attachmentError}</span>}
             </div>
           </div>
         </div>
       )}
 
       <div style={section}>
-        <strong style={{ color: "#0D265E" }}>{isRevision ? "Revisão" : "Revisão inicial"}</strong>
-        {ownerProductsLoading && <span style={hint}>Carregando produtos…</span>}
+        {isRevision && <SectionTitle icon="ClipboardList">Revisão</SectionTitle>}
         <RevisionEditor
           value={form.revision}
           onChange={(revision) => {
@@ -465,11 +535,9 @@ export const ContractFormPage = ({ mode }: { mode: ContractFormMode }) => {
             setErrors({});
           }}
           errors={errors}
-          source={form.source}
-          baseCode={form.baseCode}
           productChoices={productChoices}
-          reference={reference}
           requireJustification={isRevision}
+          itemsOnly={!isRevision}
           disabled={saving}
         />
       </div>
@@ -484,10 +552,47 @@ export const ContractFormPage = ({ mode }: { mode: ContractFormMode }) => {
         <Button variant="outlined" onClick={() => navigate(backPath)} disabled={saving}>
           Cancelar
         </Button>
-        <Button variant="contained" onClick={submit} loading={saving} disabled={saving}>
-          {mode === "create" ? "Criar rascunho" : mode === "edit" ? "Salvar rascunho" : "Criar revisão"}
+        <Button
+          variant="contained"
+          onClick={requestSave}
+          loading={saving}
+          disabled={saving || (mode === "create" && !identifiers)}
+        >
+          {mode === "create"
+            ? "Criar rascunho"
+            : mode === "edit"
+              ? "Salvar rascunho"
+              : "Criar revisão"}
         </Button>
       </div>
+
+      {confirmOpen && !isRevision && (
+        <SaveDraftModal
+          mode={mode}
+          internalCode={
+            (mode === "create" ? identifiers?.internalCode : contract?.internalCode) ?? ""
+          }
+          contractNumber={
+            (mode === "create" ? identifiers?.contractNumber : contract?.contractNumber) ?? ""
+          }
+          baseText={baseKey ? baseLabel(baseKey) : ""}
+          effectiveFrom={dateToIso(form.effectiveFrom)}
+          effectiveTo={form.effectiveTo ? dateToIso(form.effectiveTo, true) : undefined}
+          attachment={attachment}
+          items={form.revision.items
+            .filter((i) => i.included)
+            .map((item) => ({
+              item,
+              name:
+                productChoices.find((p) => p.productId === item.productId)?.name ??
+                item.productCode,
+            }))}
+          saving={saving}
+          error={submitError}
+          onConfirm={() => void save()}
+          onClose={() => setConfirmOpen(false)}
+        />
+      )}
     </div>
   );
 };

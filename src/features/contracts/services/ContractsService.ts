@@ -7,6 +7,7 @@ import {
   type ContractResponse,
   type CreateContractRequest,
   type NewRevisionRequest,
+  type NextIdentifiers,
   type Paginated,
   type UpdateContractRequest,
 } from "./contract";
@@ -56,6 +57,8 @@ export interface IContractsService {
   /** Todas as páginas do filtro (usado no filtro por cliente, que une vários depositantes). */
   listAll(q?: Omit<ContractListQuery, "page" | "limit">): Promise<ContractResponse[]>;
   get(id: string): Promise<ContractResponse>;
+  /** Sugestão de número e código interno para exibição (o definitivo vem na criação). */
+  nextIdentifiers(): Promise<NextIdentifiers>;
   create(body: CreateContractRequest): Promise<ContractResponse>;
   update(id: string, body: UpdateContractRequest): Promise<ContractResponse>;
   act(
@@ -90,6 +93,10 @@ export class ContractsService implements IContractsService {
 
   get(id: string): Promise<ContractResponse> {
     return this.http.get<ContractResponse>(CONTRACTS_ENDPOINTS.byId(id));
+  }
+
+  nextIdentifiers(): Promise<NextIdentifiers> {
+    return this.http.get<NextIdentifiers>(CONTRACTS_ENDPOINTS.nextIdentifiers);
   }
 
   create(body: CreateContractRequest): Promise<ContractResponse> {

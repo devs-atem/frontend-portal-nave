@@ -1,8 +1,8 @@
 import { normalizeCnpj } from "@features/products/services/contract";
 import type {
-  AccountingMeasure,
   ContractAction,
   ContractItemInput,
+  ContractItemResponse,
   ContractResponse,
   ContractStatus,
   CreateContractRequest,
@@ -19,8 +19,7 @@ const PERCENT_RE = /^(0|[1-9]\d*)(\.\d{1,4})?$/;
 export const isValidDecimalString = (s: string): boolean => DECIMAL_RE.test(s);
 
 /** Percentual: string não negativa, até 4 casas e ≤ 100. */
-export const isValidPercentString = (s: string): boolean =>
-  PERCENT_RE.test(s) && Number(s) <= 100;
+export const isValidPercentString = (s: string): boolean => PERCENT_RE.test(s) && Number(s) <= 100;
 
 /** `yyyy-mm-dd` → ISO UTC (início ou fim do dia). */
 export const dateToIso = (date: string, endOfDay = false): string =>
@@ -33,18 +32,14 @@ export const isoToDate = (iso?: string): string => (iso ? iso.slice(0, 10) : "")
 export const formatDate = (iso?: string, emptyLabel = "—"): string => {
   if (!iso) return emptyLabel;
   const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleDateString("pt-BR", { timeZone: "UTC" });
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString("pt-BR", { timeZone: "UTC" });
 };
 
 /** Exibe uma quantidade decimal (string) no padrão pt-BR. */
 export const formatQty = (s?: string): string => {
   if (s === undefined || s === "") return "—";
   const n = Number(s);
-  return Number.isFinite(n)
-    ? n.toLocaleString("pt-BR", { maximumFractionDigits: 4 })
-    : s;
+  return Number.isFinite(n) ? n.toLocaleString("pt-BR", { maximumFractionDigits: 4 }) : s;
 };
 
 // ─── Modelo do formulário (tudo string, como digitado) ───────────────────────
@@ -52,12 +47,10 @@ export const formatQty = (s?: string): string => {
 export interface ItemForm {
   /** Chave local estável (não vai para a API). */
   key: string;
+  /** Marcado para ir à API; itens desmarcados são ignorados na validação e no envio. */
+  included: boolean;
   productId: string;
   productCode: string;
-  customerProductCode: string;
-  customerProductDescription: string;
-  poolId: string;
-  accountingMeasure: AccountingMeasure | "";
   reservedCapacity: string;
   maximumCapacity: string;
   minimumQuota: string;
@@ -67,7 +60,6 @@ export interface ItemForm {
   movementQuantityTolerancePercent: string;
   quotaAlertPercent: string;
   allowedMovementTypeCodes: string[];
-  allowedTankCodes: string[];
 }
 
 export interface RevisionForm {
@@ -78,9 +70,6 @@ export interface RevisionForm {
 }
 
 export interface ContractForm {
-  internalCode: string;
-  contractNumber: string;
-  ownerId: string;
   source: string;
   baseCode: string;
   effectiveFrom: string;
@@ -93,12 +82,9 @@ export const newKey = (): string => `k${++keySeq}`;
 
 export const emptyItem = (): ItemForm => ({
   key: newKey(),
+  included: false,
   productId: "",
   productCode: "",
-  customerProductCode: "",
-  customerProductDescription: "",
-  poolId: "",
-  accountingMeasure: "",
   reservedCapacity: "",
   maximumCapacity: "",
   minimumQuota: "",
@@ -108,13 +94,9 @@ export const emptyItem = (): ItemForm => ({
   movementQuantityTolerancePercent: "",
   quotaAlertPercent: "",
   allowedMovementTypeCodes: [],
-  allowedTankCodes: [],
 });
 
 export const emptyContractForm = (): ContractForm => ({
-  internalCode: "",
-  contractNumber: "",
-  ownerId: "",
   source: "",
   baseCode: "",
   effectiveFrom: "",
@@ -127,15 +109,12 @@ export const emptyContractForm = (): ContractForm => ({
   },
 });
 
-/** Converte um item da API para o formulário (preserva todos os campos). */
-export const itemToForm = (i: ContractItemInput): ItemForm => ({
+/** Converte um item da API para o formulário (pool, dados do cliente, tanques e medida não são editáveis). */
+export const itemToForm = (i: ContractItemResponse): ItemForm => ({
   key: newKey(),
+  included: true,
   productId: i.productId,
   productCode: i.productCode,
-  customerProductCode: i.customerProductCode ?? "",
-  customerProductDescription: i.customerProductDescription ?? "",
-  poolId: i.poolId,
-  accountingMeasure: i.accountingMeasure,
   reservedCapacity: i.reservedCapacity,
   maximumCapacity: i.maximumCapacity,
   minimumQuota: i.minimumQuota ?? "",
@@ -145,22 +124,16 @@ export const itemToForm = (i: ContractItemInput): ItemForm => ({
   movementQuantityTolerancePercent: i.movementQuantityTolerancePercent ?? "",
   quotaAlertPercent: i.quotaAlertPercent ?? "",
   allowedMovementTypeCodes: [...i.allowedMovementTypeCodes],
-  allowedTankCodes: [...(i.allowedTankCodes ?? [])],
 });
 
 /** Revisão em rascunho (sem `approvedAt`) ou, na falta, a corrente. */
-export const draftRevisionOf = (
-  c: ContractResponse,
-): RevisionResponse | undefined =>
+export const draftRevisionOf = (c: ContractResponse): RevisionResponse | undefined =>
   c.revisions?.find((r) => !r.approvedAt) ?? c.currentRevision;
 
 /** Formulário de edição de rascunho a partir do detalhe do contrato. */
 export const formFromContract = (c: ContractResponse): ContractForm => {
   const rev = draftRevisionOf(c);
   return {
-    internalCode: c.internalCode,
-    contractNumber: c.contractNumber,
-    ownerId: c.ownerId,
     source: c.source,
     baseCode: c.baseCode,
     effectiveFrom: isoToDate(c.effectiveFrom),
@@ -189,13 +162,13 @@ export const revisionFormFromContract = (c: ContractResponse): RevisionForm => {
 
 const opt = (s: string): string | undefined => (s.trim() === "" ? undefined : s.trim());
 
+/** Medida contábil fixa (HRZ-373). */
+export const FIXED_ACCOUNTING_MEASURE = "GSV" as const;
+
 export const buildItemInput = (i: ItemForm): ContractItemInput => ({
   productId: i.productId,
   productCode: i.productCode,
-  customerProductCode: opt(i.customerProductCode),
-  customerProductDescription: opt(i.customerProductDescription),
-  poolId: i.poolId,
-  accountingMeasure: i.accountingMeasure as AccountingMeasure,
+  accountingMeasure: FIXED_ACCOUNTING_MEASURE,
   reservedCapacity: i.reservedCapacity.trim(),
   maximumCapacity: i.maximumCapacity.trim(),
   minimumQuota: opt(i.minimumQuota),
@@ -205,27 +178,47 @@ export const buildItemInput = (i: ItemForm): ContractItemInput => ({
   movementQuantityTolerancePercent: opt(i.movementQuantityTolerancePercent),
   quotaAlertPercent: opt(i.quotaAlertPercent),
   allowedMovementTypeCodes: i.allowedMovementTypeCodes,
-  allowedTankCodes: i.allowedTankCodes,
+  allowedTankCodes: [],
 });
 
 export const buildRevisionInput = (r: RevisionForm): RevisionInput => ({
   effectiveFrom: dateToIso(r.effectiveFrom),
   effectiveUntil: r.effectiveUntil ? dateToIso(r.effectiveUntil, true) : undefined,
   justification: opt(r.justification),
-  items: r.items.map(buildItemInput),
+  items: r.items.filter((i) => i.included).map(buildItemInput),
 });
 
-/** Corpo completo (POST e PATCH): somente campos conhecidos, sem extras. */
-export const buildContractRequest = (f: ContractForm): CreateContractRequest => ({
-  internalCode: f.internalCode.trim(),
-  contractNumber: f.contractNumber.trim(),
-  // Depositante/Base opcionais por enquanto: omitidos quando vazios.
-  ...(f.ownerId ? { ownerId: f.ownerId } : {}),
-  ...(f.source && f.baseCode ? { source: f.source, baseCode: f.baseCode } : {}),
-  effectiveFrom: dateToIso(f.effectiveFrom),
-  effectiveTo: f.effectiveTo ? dateToIso(f.effectiveTo, true) : undefined,
-  revision: buildRevisionInput(f.revision),
+/** A revisão só existe no corpo quando há itens (o formulário de contrato não a envia vazia). */
+export const hasRevisionData = (r: RevisionForm): boolean => r.items.some((i) => i.included);
+
+/**
+ * No formulário de contrato não há vigência nem justificativa da revisão (HRZ-373):
+ * a revisão acompanha a vigência do contrato.
+ */
+export const withContractRevisionDates = (f: ContractForm): ContractForm => ({
+  ...f,
+  revision: {
+    ...f.revision,
+    effectiveFrom: f.effectiveFrom,
+    effectiveUntil: f.effectiveTo,
+    justification: "",
+  },
 });
+
+/**
+ * Corpo completo (POST e PATCH): somente campos conhecidos. Número, código
+ * interno, depositante e pool são definidos pelo backend.
+ */
+export const buildContractRequest = (input: ContractForm): CreateContractRequest => {
+  const f = withContractRevisionDates(input);
+  return {
+    source: f.source,
+    baseCode: f.baseCode,
+    effectiveFrom: dateToIso(f.effectiveFrom),
+    effectiveTo: f.effectiveTo ? dateToIso(f.effectiveTo, true) : undefined,
+    ...(hasRevisionData(f.revision) ? { revision: buildRevisionInput(f.revision) } : {}),
+  };
+};
 
 // ─── Validação ───────────────────────────────────────────────────────────────
 
@@ -240,6 +233,11 @@ export interface ValidateOptions {
   contractTo?: string;
   /** Revisões já existentes (nova revisão deve ser posterior a todas). */
   existingRevisions?: RevisionResponse[];
+  /**
+   * Edição de um rascunho que já tem itens: a API trata a ausência de `revision` como
+   * "manter", então desmarcar todos os itens deixaria os antigos no contrato sem aparecerem na tela.
+   */
+  hadDraftItems?: boolean;
 }
 
 const time = (date: string): number => new Date(`${date}T00:00:00Z`).getTime();
@@ -249,8 +247,6 @@ export function validateItem(i: ItemForm): ValidationErrors {
   const k = (f: string): string => `item.${i.key}.${f}`;
 
   if (!i.productId) e[k("productId")] = "Selecione o produto.";
-  if (!i.poolId) e[k("poolId")] = "Selecione o pool.";
-  if (!i.accountingMeasure) e[k("accountingMeasure")] = "Selecione a medida.";
 
   const required: [keyof ItemForm, string][] = [
     ["reservedCapacity", "Informe a capacidade reservada."],
@@ -288,18 +284,14 @@ export function validateItem(i: ItemForm): ValidationErrors {
   return e;
 }
 
-export function validateContractForm(
-  f: ContractForm,
-  o: ValidateOptions,
-): ValidationErrors {
+export function validateContractForm(input: ContractForm, o: ValidateOptions): ValidationErrors {
+  const f = o.mode === "contract" ? withContractRevisionDates(input) : input;
   const e: ValidationErrors = {};
   let from = o.contractFrom;
   let to = o.contractTo;
 
   if (o.mode === "contract") {
-    if (!f.internalCode.trim()) e.internalCode = "Informe o código interno.";
-    if (!f.contractNumber.trim()) e.contractNumber = "Informe o número do contrato.";
-    // Depositante e Base: NÃO obrigatórios por enquanto (/owners/all ainda vem vazio).
+    if (!f.source || !f.baseCode) e.base = "Selecione a base.";
     if (!f.effectiveFrom) e.effectiveFrom = "Informe o início da vigência.";
     if (f.effectiveFrom && f.effectiveTo && time(f.effectiveTo) <= time(f.effectiveFrom)) {
       e.effectiveTo = "O fim deve ser posterior ao início.";
@@ -309,6 +301,14 @@ export function validateContractForm(
   }
 
   const r = f.revision;
+  // Na criação/edição de rascunho a revisão é opcional: sem dados, nada a validar.
+  if (o.mode === "contract" && !hasRevisionData(r)) {
+    if (o.hadDraftItems) {
+      e["rev.items"] =
+        "O rascunho já tem itens: mantenha ao menos um item marcado para não deixar itens antigos no contrato.";
+    }
+    return e;
+  }
   if (!r.effectiveFrom) e["rev.effectiveFrom"] = "Informe o início da revisão.";
   if (r.effectiveFrom && r.effectiveUntil && time(r.effectiveUntil) <= time(r.effectiveFrom)) {
     e["rev.effectiveUntil"] = "O fim deve ser posterior ao início da revisão.";
@@ -332,16 +332,16 @@ export function validateContractForm(
     }
   }
 
-  if (r.items.length === 0) e["rev.items"] = "Adicione ao menos um item.";
+  const included = r.items.filter((i) => i.included);
+  if (included.length === 0) e["rev.items"] = "Marque ao menos um item.";
   const seen = new Set<string>();
-  for (const item of r.items) {
+  for (const item of included) {
     Object.assign(e, validateItem(item));
-    const pair = `${item.productId}|${item.poolId}`;
-    if (item.productId && item.poolId) {
-      if (seen.has(pair)) {
-        e[`item.${item.key}.poolId`] = "Este produto já está neste pool na revisão.";
+    if (item.productId) {
+      if (seen.has(item.productId)) {
+        e[`item.${item.key}.productId`] = "Este produto já está na revisão.";
       }
-      seen.add(pair);
+      seen.add(item.productId);
     }
   }
   return e;
@@ -365,10 +365,7 @@ export interface AvailableActions {
  * Ações disponíveis por status e permissão (máquina de estados do back).
  * ACTIVE não pode ser cancelado direto: precisa passar por CLOSING → CLOSED.
  */
-export function allowedActions(
-  status: ContractStatus,
-  p: ActionPermissions,
-): AvailableActions {
+export function allowedActions(status: ContractStatus, p: ActionPermissions): AvailableActions {
   const actions: ContractAction[] = [];
   let edit = false;
   let newRevision = false;
@@ -403,8 +400,9 @@ export function allowedActions(
 // ─── Vínculo cliente ↔ Owner (por CNPJ) ──────────────────────────────────────
 
 /** Todos os CNPJs do cliente (matriz + filiais), normalizados e sem repetição. */
-export const clientCnpjs = (c: { cnpj: string; branches: string[] }): string[] =>
-  [...new Set([c.cnpj, ...c.branches].map(normalizeCnpj).filter(Boolean))];
+export const clientCnpjs = (c: { cnpj: string; branches: string[] }): string[] => [
+  ...new Set([c.cnpj, ...c.branches].map(normalizeCnpj).filter(Boolean)),
+];
 
 /** `owner.cnpj` ∈ {matriz + filiais} do cliente (ignora máscara). */
 export const clientOwnsCnpj = (

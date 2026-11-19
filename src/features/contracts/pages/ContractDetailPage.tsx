@@ -16,8 +16,11 @@ import { ActionModal } from "../components/ActionModal";
 import { ContractStatusTag } from "../components/ContractStatusTag";
 import { OwnerProductsPanel } from "../components/OwnerProductsPanel";
 import { useContractPermissions } from "../permissions";
+import { downloadBlob } from "../services/downloadBlob";
 import {
   CONTRACT_ACTION_LABEL,
+  DEFAULT_OWNER_INTERNAL_CODE,
+  type AttachmentResponse,
   type ContractAction,
   type ContractActionRequest,
   type ContractItemResponse,
@@ -26,12 +29,7 @@ import {
   type RevisionResponse,
 } from "../services/contract";
 import { contractErrorMessage, errorStatus, isStaleStateError } from "../services/contractErrors";
-import {
-  allowedActions,
-  clientOwnsCnpj,
-  formatDate,
-  formatQty,
-} from "../services/contractRules";
+import { allowedActions, clientOwnsCnpj, formatDate, formatQty } from "../services/contractRules";
 
 type Tab = "summary" | "revisions" | "owner";
 
@@ -45,7 +43,12 @@ const section: CSSProperties = {
   gap: 14,
 };
 const hint: CSSProperties = { fontSize: 12, color: "#5B6475" };
-const dt: CSSProperties = { fontSize: 11, fontWeight: 600, color: "#5B6475", textTransform: "uppercase" };
+const dt: CSSProperties = {
+  fontSize: 11,
+  fontWeight: 600,
+  color: "#5B6475",
+  textTransform: "uppercase",
+};
 const dd: CSSProperties = { margin: 0, fontSize: 14, color: "#1F2937" };
 
 const Field = ({ title, children }: { title: string; children: ReactNode }) => (
@@ -71,10 +74,20 @@ const buildItemColumns = (
       </span>
     ),
   },
-  { id: "pool", label: "Pool", accessor: (i) => poolLabel(i.poolId) },
+  { id: "pool", label: "Pool", accessor: (i) => (i.poolId ? poolLabel(i.poolId) : "Padrão") },
   { id: "measure", label: "Medida", accessor: (i) => i.accountingMeasure },
-  { id: "reserved", label: "Cap. reservada", align: "right", accessor: (i) => formatQty(i.reservedCapacity) },
-  { id: "max", label: "Cap. máxima", align: "right", accessor: (i) => formatQty(i.maximumCapacity) },
+  {
+    id: "reserved",
+    label: "Cap. reservada",
+    align: "right",
+    accessor: (i) => formatQty(i.reservedCapacity),
+  },
+  {
+    id: "max",
+    label: "Cap. máxima",
+    align: "right",
+    accessor: (i) => formatQty(i.maximumCapacity),
+  },
   { id: "minq", label: "Cota mín.", align: "right", accessor: (i) => formatQty(i.minimumQuota) },
   { id: "maxq", label: "Cota máx.", align: "right", accessor: (i) => formatQty(i.maximumQuota) },
   { id: "types", label: "Movimentos", accessor: (i) => i.allowedMovementTypeCodes.join(", ") },
@@ -122,6 +135,7 @@ export const ContractDetailPage = () => {
   const owners = useIoC("owners");
   const clientsSvc = useIoC("clientRegistration");
   const reference = useIoC("contractsReference");
+  const files = useIoC("contractsFiles");
   const perms = useContractPermissions();
 
   const [contract, setContract] = useState<ContractResponse | null>(null);
@@ -164,9 +178,11 @@ export const ContractDetailPage = () => {
   }, [contracts, id, reloadToken]);
 
   // Depositante completo e clientes (best effort: sem acesso, a tela segue com o embutido).
+  // O depositante padrão é um placeholder: não há o que buscar nem exibir.
   const ownerId = contract?.ownerId;
+  const isDefaultOwner = contract?.owner?.internalCode === DEFAULT_OWNER_INTERNAL_CODE;
   useEffect(() => {
-    if (!ownerId) return;
+    if (!ownerId || isDefaultOwner) return;
     let cancelled = false;
     void Promise.allSettled([owners.get(ownerId), clientsSvc.list()]).then(([o, c]) => {
       if (cancelled) return;
@@ -176,7 +192,7 @@ export const ContractDetailPage = () => {
     return () => {
       cancelled = true;
     };
-  }, [owners, clientsSvc, ownerId]);
+  }, [owners, clientsSvc, ownerId, isDefaultOwner]);
 
   // Nomes de pool e produto (best effort). O contrato devolve só `poolId`; sem
   // `app:custody:pool:read` (403) cai no início do id.
@@ -192,13 +208,13 @@ export const ContractDetailPage = () => {
       if (cancelled) return;
       setPoolNames(
         new Map(
-          pools.status === "fulfilled" ? pools.value.map((p) => [p.id, `${p.code} — ${p.name}`]) : [],
+          pools.status === "fulfilled"
+            ? pools.value.map((p) => [p.id, `${p.code} — ${p.name}`])
+            : [],
         ),
       );
       setProductNames(
-        new Map(
-          products.status === "fulfilled" ? products.value.map((p) => [p.id, p.name]) : [],
-        ),
+        new Map(products.status === "fulfilled" ? products.value.map((p) => [p.id, p.name]) : []),
       );
     });
     return () => {
@@ -244,11 +260,20 @@ export const ContractDetailPage = () => {
   const available = allowedActions(contract.status, perms);
   const ownerView = owner ?? contract.owner;
   const client = clients.find((c) => clientOwnsCnpj(c, ownerView?.cnpj));
-  const revisions = contract.revisions ?? (contract.currentRevision ? [contract.currentRevision] : []);
+  const revisions =
+    contract.revisions ?? (contract.currentRevision ? [contract.currentRevision] : []);
   const itemColumns = buildItemColumns(
     (pid) => poolNames.get(pid) ?? `${pid.slice(0, 8)}…`,
     (prodId) => productNames.get(prodId),
   );
+
+  const downloadAttachment = async (att: AttachmentResponse): Promise<void> => {
+    try {
+      downloadBlob(await files.download(att.id), att.fileName);
+    } catch {
+      toast.error("Não foi possível baixar o anexo.");
+    }
+  };
 
   const confirmAction = async (body: ContractActionRequest): Promise<void> => {
     if (!action) return;
@@ -274,12 +299,18 @@ export const ContractDetailPage = () => {
               Voltar
             </Button>
             {available.edit && (
-              <Button variant="outlined" onClick={() => navigate(`/contratos/${contract.id}/editar`)}>
+              <Button
+                variant="outlined"
+                onClick={() => navigate(`/contratos/${contract.id}/editar`)}
+              >
                 Editar
               </Button>
             )}
             {available.newRevision && (
-              <Button variant="outlined" onClick={() => navigate(`/contratos/${contract.id}/nova-revisao`)}>
+              <Button
+                variant="outlined"
+                onClick={() => navigate(`/contratos/${contract.id}/nova-revisao`)}
+              >
                 Nova revisão
               </Button>
             )}
@@ -297,15 +328,11 @@ export const ContractDetailPage = () => {
         }
       />
 
-      <CustomTabs
-        value={tab}
-        onChange={(v) => setTab(v as Tab)}
-        aria-label="Seções do contrato"
-      >
+      <CustomTabs value={tab} onChange={(v) => setTab(v as Tab)} aria-label="Seções do contrato">
         <CustomTabs.List aria-label="Alternar seção do contrato">
           <CustomTabs.Tab value="summary">Resumo</CustomTabs.Tab>
           <CustomTabs.Tab value="revisions">Revisões ({revisions.length})</CustomTabs.Tab>
-          <CustomTabs.Tab value="owner">Depositante</CustomTabs.Tab>
+          {!isDefaultOwner && <CustomTabs.Tab value="owner">Depositante</CustomTabs.Tab>}
         </CustomTabs.List>
       </CustomTabs>
 
@@ -321,22 +348,47 @@ export const ContractDetailPage = () => {
             <Field title="Status">
               <ContractStatusTag status={contract.status} />
             </Field>
-            <Field title="Depositante">{ownerView?.legalName ?? contract.ownerId}</Field>
-            <Field title="Cliente (por CNPJ)">{client?.name ?? "—"}</Field>
+            {!isDefaultOwner && (
+              <>
+                <Field title="Depositante">{ownerView?.legalName ?? contract.ownerId}</Field>
+                <Field title="Cliente (por CNPJ)">{client?.name ?? "—"}</Field>
+              </>
+            )}
             <Field title="Base">
               {contract.baseCode} <span style={hint}>({contract.source})</span>
             </Field>
             <Field title="Vigência">
-              {formatDate(contract.effectiveFrom)} → {formatDate(contract.effectiveTo, "Indeterminada")}
+              {formatDate(contract.effectiveFrom)} →{" "}
+              {formatDate(contract.effectiveTo, "Indeterminada")}
             </Field>
             <Field title="Revisão vigente">
-              {contract.currentRevision ? `Revisão ${contract.currentRevision.revisionNumber}` : "Nenhuma aprovada"}
+              {contract.currentRevision
+                ? `Revisão ${contract.currentRevision.revisionNumber}`
+                : "Nenhuma aprovada"}
             </Field>
           </div>
+          <Field title="Anexos">
+            {(contract.attachments ?? []).length === 0 ? (
+              "Nenhum anexo"
+            ) : (
+              <span style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                {(contract.attachments ?? []).map((att) => (
+                  <Button
+                    key={att.id}
+                    variant="outlined"
+                    size="sm"
+                    onClick={() => void downloadAttachment(att)}
+                  >
+                    {att.fileName}
+                  </Button>
+                ))}
+              </span>
+            )}
+          </Field>
           {contract.status === "ACTIVE" || contract.status === "SUSPENDED" ? (
             <span style={hint}>
-              Uma nova revisão nasce aprovada, mas só passa a valer na data de início, aplicada
-              pelo job de ciclo de vida.
+              Uma nova revisão nasce aprovada, mas só passa a valer na data de início, aplicada pelo
+              job de ciclo de vida.
             </span>
           ) : null}
         </div>
@@ -358,7 +410,7 @@ export const ContractDetailPage = () => {
           ))
         ))}
 
-      {tab === "owner" && (
+      {tab === "owner" && !isDefaultOwner && (
         <div style={section}>
           <strong style={{ color: "#0D265E" }}>{ownerView?.legalName ?? "Depositante"}</strong>
           <div
