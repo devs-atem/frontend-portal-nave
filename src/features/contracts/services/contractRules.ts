@@ -19,8 +19,7 @@ const PERCENT_RE = /^(0|[1-9]\d*)(\.\d{1,4})?$/;
 export const isValidDecimalString = (s: string): boolean => DECIMAL_RE.test(s);
 
 /** Percentual: string não negativa, até 4 casas e ≤ 100. */
-export const isValidPercentString = (s: string): boolean =>
-  PERCENT_RE.test(s) && Number(s) <= 100;
+export const isValidPercentString = (s: string): boolean => PERCENT_RE.test(s) && Number(s) <= 100;
 
 /** `yyyy-mm-dd` → ISO UTC (início ou fim do dia). */
 export const dateToIso = (date: string, endOfDay = false): string =>
@@ -33,18 +32,14 @@ export const isoToDate = (iso?: string): string => (iso ? iso.slice(0, 10) : "")
 export const formatDate = (iso?: string, emptyLabel = "—"): string => {
   if (!iso) return emptyLabel;
   const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleDateString("pt-BR", { timeZone: "UTC" });
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString("pt-BR", { timeZone: "UTC" });
 };
 
 /** Exibe uma quantidade decimal (string) no padrão pt-BR. */
 export const formatQty = (s?: string): string => {
   if (s === undefined || s === "") return "—";
   const n = Number(s);
-  return Number.isFinite(n)
-    ? n.toLocaleString("pt-BR", { maximumFractionDigits: 4 })
-    : s;
+  return Number.isFinite(n) ? n.toLocaleString("pt-BR", { maximumFractionDigits: 4 }) : s;
 };
 
 // ─── Modelo do formulário (tudo string, como digitado) ───────────────────────
@@ -132,9 +127,7 @@ export const itemToForm = (i: ContractItemResponse): ItemForm => ({
 });
 
 /** Revisão em rascunho (sem `approvedAt`) ou, na falta, a corrente. */
-export const draftRevisionOf = (
-  c: ContractResponse,
-): RevisionResponse | undefined =>
+export const draftRevisionOf = (c: ContractResponse): RevisionResponse | undefined =>
   c.revisions?.find((r) => !r.approvedAt) ?? c.currentRevision;
 
 /** Formulário de edição de rascunho a partir do detalhe do contrato. */
@@ -204,7 +197,12 @@ export const hasRevisionData = (r: RevisionForm): boolean => r.items.some((i) =>
  */
 export const withContractRevisionDates = (f: ContractForm): ContractForm => ({
   ...f,
-  revision: { ...f.revision, effectiveFrom: f.effectiveFrom, effectiveUntil: f.effectiveTo, justification: "" },
+  revision: {
+    ...f.revision,
+    effectiveFrom: f.effectiveFrom,
+    effectiveUntil: f.effectiveTo,
+    justification: "",
+  },
 });
 
 /**
@@ -235,6 +233,11 @@ export interface ValidateOptions {
   contractTo?: string;
   /** Revisões já existentes (nova revisão deve ser posterior a todas). */
   existingRevisions?: RevisionResponse[];
+  /**
+   * Edição de um rascunho que já tem itens: a API trata a ausência de `revision` como
+   * "manter", então desmarcar todos os itens deixaria os antigos no contrato sem aparecerem na tela.
+   */
+  hadDraftItems?: boolean;
 }
 
 const time = (date: string): number => new Date(`${date}T00:00:00Z`).getTime();
@@ -281,10 +284,7 @@ export function validateItem(i: ItemForm): ValidationErrors {
   return e;
 }
 
-export function validateContractForm(
-  input: ContractForm,
-  o: ValidateOptions,
-): ValidationErrors {
+export function validateContractForm(input: ContractForm, o: ValidateOptions): ValidationErrors {
   const f = o.mode === "contract" ? withContractRevisionDates(input) : input;
   const e: ValidationErrors = {};
   let from = o.contractFrom;
@@ -302,7 +302,13 @@ export function validateContractForm(
 
   const r = f.revision;
   // Na criação/edição de rascunho a revisão é opcional: sem dados, nada a validar.
-  if (o.mode === "contract" && !hasRevisionData(r)) return e;
+  if (o.mode === "contract" && !hasRevisionData(r)) {
+    if (o.hadDraftItems) {
+      e["rev.items"] =
+        "O rascunho já tem itens: mantenha ao menos um item marcado para não deixar itens antigos no contrato.";
+    }
+    return e;
+  }
   if (!r.effectiveFrom) e["rev.effectiveFrom"] = "Informe o início da revisão.";
   if (r.effectiveFrom && r.effectiveUntil && time(r.effectiveUntil) <= time(r.effectiveFrom)) {
     e["rev.effectiveUntil"] = "O fim deve ser posterior ao início da revisão.";
@@ -359,10 +365,7 @@ export interface AvailableActions {
  * Ações disponíveis por status e permissão (máquina de estados do back).
  * ACTIVE não pode ser cancelado direto: precisa passar por CLOSING → CLOSED.
  */
-export function allowedActions(
-  status: ContractStatus,
-  p: ActionPermissions,
-): AvailableActions {
+export function allowedActions(status: ContractStatus, p: ActionPermissions): AvailableActions {
   const actions: ContractAction[] = [];
   let edit = false;
   let newRevision = false;
@@ -397,8 +400,9 @@ export function allowedActions(
 // ─── Vínculo cliente ↔ Owner (por CNPJ) ──────────────────────────────────────
 
 /** Todos os CNPJs do cliente (matriz + filiais), normalizados e sem repetição. */
-export const clientCnpjs = (c: { cnpj: string; branches: string[] }): string[] =>
-  [...new Set([c.cnpj, ...c.branches].map(normalizeCnpj).filter(Boolean))];
+export const clientCnpjs = (c: { cnpj: string; branches: string[] }): string[] => [
+  ...new Set([c.cnpj, ...c.branches].map(normalizeCnpj).filter(Boolean)),
+];
 
 /** `owner.cnpj` ∈ {matriz + filiais} do cliente (ignora máscara). */
 export const clientOwnsCnpj = (

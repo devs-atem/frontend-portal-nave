@@ -196,6 +196,15 @@ describe("buildContractRequest", () => {
     expect(body).toMatchObject({ source: "SRC", baseCode: "SSA" });
   });
 
+  it("edição de rascunho com itens: não permite desmarcar todos", () => {
+    const none = validForm({
+      revision: { ...validForm().revision, items: [validItem({ included: false })] },
+    });
+    expect(validateContractForm(none, { ...OPTS, hadDraftItems: true })["rev.items"]).toBeTruthy();
+    expect(validateContractForm(none, OPTS)["rev.items"]).toBeUndefined();
+    expect(validateContractForm(validForm(), { ...OPTS, hadDraftItems: true })).toEqual({});
+  });
+
   it("só os itens marcados vão para a API e são validados", () => {
     const off = validItem({ productId: "p2", included: false, reservedCapacity: "" });
     const form = validForm({ revision: { ...validForm().revision, items: [validItem(), off] } });

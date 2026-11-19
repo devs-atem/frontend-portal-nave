@@ -94,7 +94,7 @@ O formulário de contrato SHALL oferecer um campo para anexar um arquivo ao cont
 
 #### Scenario: Falha ao anexar
 - **WHEN** o contrato é criado e o anexo falha
-- **THEN** o portal informa que o contrato foi criado sem anexo e leva o usuário ao detalhe
+- **THEN** o portal informa, com mensagem fixa, que o contrato foi criado mas o anexo não foi salvo, registra o erro original no console e leva o usuário ao detalhe
 
 #### Scenario: Arquivo rejeitado
 - **WHEN** o arquivo excede 20 MB ou tem tipo não permitido
@@ -151,3 +151,11 @@ Ao criar ou editar um rascunho, o portal SHALL exibir um modal de confirmação 
 #### Scenario: Formulário inválido
 - **WHEN** o formulário tem erros de validação
 - **THEN** o modal não abre e os campos inválidos são destacados
+
+### Requirement: Edição de rascunho com itens
+
+Na edição de um rascunho que já possui itens, o formulário MUST exigir ao menos um item marcado, porque a ausência de `revision` no `PATCH` mantém os itens antigos no contrato.
+
+#### Scenario: Desmarcar todos os itens
+- **WHEN** o usuário edita um rascunho que já tem itens e desmarca todos
+- **THEN** o formulário bloqueia o envio e pede para manter ao menos um item marcado

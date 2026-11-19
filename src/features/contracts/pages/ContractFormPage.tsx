@@ -19,11 +19,11 @@ import { SaveDraftModal } from "../components/SaveDraftModal";
 import { RevisionEditor, type ProductChoice } from "../components/RevisionEditor";
 import type { BaseResponse, ContractResponse, NextIdentifiers } from "../services/contract";
 import { validateAttachmentFile } from "../services/FilesService";
+import { attachmentFailedMessage, submitContractForm } from "../services/submitContractForm";
 import { contractErrorMessage, errorStatus, isStaleStateError } from "../services/contractErrors";
 import {
-  buildContractRequest,
-  buildRevisionInput,
   dateToIso,
+  draftRevisionOf,
   emptyContractForm,
   formFromContract,
   isoToDate,
@@ -298,6 +298,8 @@ export const ContractFormPage = ({ mode }: { mode: ContractFormMode }) => {
       contractFrom: isRevision ? isoToDate(contract?.effectiveFrom) : undefined,
       contractTo: isRevision ? isoToDate(contract?.effectiveTo) || undefined : undefined,
       existingRevisions: isRevision ? contract?.revisions : undefined,
+      hadDraftItems:
+        mode === "edit" && !!contract && (draftRevisionOf(contract)?.items.length ?? 0) > 0,
     });
     setErrors(e);
     setSubmitError(null);
@@ -314,49 +316,19 @@ export const ContractFormPage = ({ mode }: { mode: ContractFormMode }) => {
   const save = async () => {
     setSaving(true);
     try {
-      let saved: ContractResponse;
-      // O arquivo temporário é enviado antes de gravar o contrato: se o envio
-      // falhar (tipo/tamanho), nada é criado.
-      const uploaded = attachment && mode !== "revision" ? await files.upload(attachment) : null;
-      if (mode === "create") {
-        saved = await contracts.create(buildContractRequest(form));
-        toast.success(`Contrato ${saved.contractNumber} criado em rascunho.`);
-      } else if (mode === "edit" && id) {
-        saved = await contracts.update(id, buildContractRequest(form));
-        toast.success("Rascunho atualizado.");
-      } else if (id) {
-        saved = await contracts.createRevision(id, {
-          ...buildRevisionInput(form.revision),
-          justification: form.revision.justification.trim(),
-        });
-        toast.success("Nova revisão criada.");
-      } else {
-        return;
-      }
-      const contractId = saved?.id ?? id ?? "";
-      if (uploaded && contractId) {
-        try {
-          await files.attachToContract(contractId, [uploaded.key]);
-        } catch (attachErr) {
-          toast.warning(
-            contractErrorMessage(
-              attachErr,
-              "O contrato foi salvo, mas não foi possível anexar o arquivo.",
-            ),
-          );
-        }
-      }
-      navigate(`/contratos/${contractId}`.replace(/\/$/, ""));
+      const result = await submitContractForm(
+        { mode, id, form, attachment },
+        { contracts, files, onIdentifiers: setIdentifiers },
+      );
+      if (!result) return;
+      if (mode === "create")
+        toast.success(`Contrato ${result.contract.contractNumber} criado em rascunho.`);
+      else if (mode === "edit") toast.success("Rascunho atualizado.");
+      else toast.success("Nova revisão criada.");
+      if (result.attachmentFailed) toast.warning(attachmentFailedMessage(mode));
+      navigate(`/contratos/${result.contractId}`.replace(/\/$/, ""));
     } catch (err) {
-      const status = errorStatus(err);
       const msg = contractErrorMessage(err, "Não foi possível salvar o contrato.");
-      if (status === 409 && mode === "create") {
-        // Número gerado em conflito: busca outra sugestão para nova tentativa.
-        contracts
-          .nextIdentifiers()
-          .then(setIdentifiers)
-          .catch(() => undefined);
-      }
       setSubmitError(msg);
       toast.error(msg);
       if (isStaleStateError(err) && id) navigate(`/contratos/${id}`);
@@ -541,6 +513,7 @@ export const ContractFormPage = ({ mode }: { mode: ContractFormMode }) => {
               </span>
               <FileField
                 ariaLabel="Anexo do contrato"
+                accept=".pdf,.doc,.docx,.jpg,.jpeg"
                 hint="PDF, DOC, DOCX ou JPG  •  Até 20 MB"
                 value={attachment}
                 onChange={onPickFile}

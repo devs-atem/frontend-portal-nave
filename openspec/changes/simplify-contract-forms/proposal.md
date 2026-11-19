@@ -8,7 +8,7 @@ Para validar o fluxo de contratos (HRZ-373), o formulário de novo contrato e o 
 - **Código interno**: exibido desativado, com o valor padrão devolvido pelo backend.
 - **Número do contrato**: carregado do backend ao abrir a página (`GET /contracts/next-identifiers`) e exibido desativado. O número definitivo é o da resposta do `POST`.
 - **Depositante**: campo removido; `ownerId` deixa de ser enviado.
-- **Base**: continua listando `GET /operational-catalog/bases/all` (cadastro já existente).
+- **Base**: continua listando `GET /operational-catalog/bases/all` (cadastro já existente) e **passa a ser obrigatória**, porque o backend exige `source` e `baseCode` ao criar o contrato (antes o formulário os omitia quando vazios).
 - **Seção "Revisão inicial"**: removida a vigência e a justificativa da revisão; o formulário de itens continua na criação e na edição, e a revisão acompanha a vigência do contrato.
 - **Anexo de contrato**: novo campo de upload (envio em `POST /files`, confirmação em `POST /attachments` com `entityType = CONTRACT`, após salvar o rascunho). Lista e download dos anexos na página de detalhe.
 

@@ -16,6 +16,7 @@ import { ActionModal } from "../components/ActionModal";
 import { ContractStatusTag } from "../components/ContractStatusTag";
 import { OwnerProductsPanel } from "../components/OwnerProductsPanel";
 import { useContractPermissions } from "../permissions";
+import { downloadBlob } from "../services/downloadBlob";
 import {
   CONTRACT_ACTION_LABEL,
   DEFAULT_OWNER_INTERNAL_CODE,
@@ -28,12 +29,7 @@ import {
   type RevisionResponse,
 } from "../services/contract";
 import { contractErrorMessage, errorStatus, isStaleStateError } from "../services/contractErrors";
-import {
-  allowedActions,
-  clientOwnsCnpj,
-  formatDate,
-  formatQty,
-} from "../services/contractRules";
+import { allowedActions, clientOwnsCnpj, formatDate, formatQty } from "../services/contractRules";
 
 type Tab = "summary" | "revisions" | "owner";
 
@@ -47,7 +43,12 @@ const section: CSSProperties = {
   gap: 14,
 };
 const hint: CSSProperties = { fontSize: 12, color: "#5B6475" };
-const dt: CSSProperties = { fontSize: 11, fontWeight: 600, color: "#5B6475", textTransform: "uppercase" };
+const dt: CSSProperties = {
+  fontSize: 11,
+  fontWeight: 600,
+  color: "#5B6475",
+  textTransform: "uppercase",
+};
 const dd: CSSProperties = { margin: 0, fontSize: 14, color: "#1F2937" };
 
 const Field = ({ title, children }: { title: string; children: ReactNode }) => (
@@ -75,8 +76,18 @@ const buildItemColumns = (
   },
   { id: "pool", label: "Pool", accessor: (i) => (i.poolId ? poolLabel(i.poolId) : "Padrão") },
   { id: "measure", label: "Medida", accessor: (i) => i.accountingMeasure },
-  { id: "reserved", label: "Cap. reservada", align: "right", accessor: (i) => formatQty(i.reservedCapacity) },
-  { id: "max", label: "Cap. máxima", align: "right", accessor: (i) => formatQty(i.maximumCapacity) },
+  {
+    id: "reserved",
+    label: "Cap. reservada",
+    align: "right",
+    accessor: (i) => formatQty(i.reservedCapacity),
+  },
+  {
+    id: "max",
+    label: "Cap. máxima",
+    align: "right",
+    accessor: (i) => formatQty(i.maximumCapacity),
+  },
   { id: "minq", label: "Cota mín.", align: "right", accessor: (i) => formatQty(i.minimumQuota) },
   { id: "maxq", label: "Cota máx.", align: "right", accessor: (i) => formatQty(i.maximumQuota) },
   { id: "types", label: "Movimentos", accessor: (i) => i.allowedMovementTypeCodes.join(", ") },
@@ -197,13 +208,13 @@ export const ContractDetailPage = () => {
       if (cancelled) return;
       setPoolNames(
         new Map(
-          pools.status === "fulfilled" ? pools.value.map((p) => [p.id, `${p.code} — ${p.name}`]) : [],
+          pools.status === "fulfilled"
+            ? pools.value.map((p) => [p.id, `${p.code} — ${p.name}`])
+            : [],
         ),
       );
       setProductNames(
-        new Map(
-          products.status === "fulfilled" ? products.value.map((p) => [p.id, p.name]) : [],
-        ),
+        new Map(products.status === "fulfilled" ? products.value.map((p) => [p.id, p.name]) : []),
       );
     });
     return () => {
@@ -249,7 +260,8 @@ export const ContractDetailPage = () => {
   const available = allowedActions(contract.status, perms);
   const ownerView = owner ?? contract.owner;
   const client = clients.find((c) => clientOwnsCnpj(c, ownerView?.cnpj));
-  const revisions = contract.revisions ?? (contract.currentRevision ? [contract.currentRevision] : []);
+  const revisions =
+    contract.revisions ?? (contract.currentRevision ? [contract.currentRevision] : []);
   const itemColumns = buildItemColumns(
     (pid) => poolNames.get(pid) ?? `${pid.slice(0, 8)}…`,
     (prodId) => productNames.get(prodId),
@@ -257,13 +269,7 @@ export const ContractDetailPage = () => {
 
   const downloadAttachment = async (att: AttachmentResponse): Promise<void> => {
     try {
-      const blob = await files.download(att.id);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = att.fileName;
-      a.click();
-      URL.revokeObjectURL(url);
+      downloadBlob(await files.download(att.id), att.fileName);
     } catch {
       toast.error("Não foi possível baixar o anexo.");
     }
@@ -293,12 +299,18 @@ export const ContractDetailPage = () => {
               Voltar
             </Button>
             {available.edit && (
-              <Button variant="outlined" onClick={() => navigate(`/contratos/${contract.id}/editar`)}>
+              <Button
+                variant="outlined"
+                onClick={() => navigate(`/contratos/${contract.id}/editar`)}
+              >
                 Editar
               </Button>
             )}
             {available.newRevision && (
-              <Button variant="outlined" onClick={() => navigate(`/contratos/${contract.id}/nova-revisao`)}>
+              <Button
+                variant="outlined"
+                onClick={() => navigate(`/contratos/${contract.id}/nova-revisao`)}
+              >
                 Nova revisão
               </Button>
             )}
@@ -316,11 +328,7 @@ export const ContractDetailPage = () => {
         }
       />
 
-      <CustomTabs
-        value={tab}
-        onChange={(v) => setTab(v as Tab)}
-        aria-label="Seções do contrato"
-      >
+      <CustomTabs value={tab} onChange={(v) => setTab(v as Tab)} aria-label="Seções do contrato">
         <CustomTabs.List aria-label="Alternar seção do contrato">
           <CustomTabs.Tab value="summary">Resumo</CustomTabs.Tab>
           <CustomTabs.Tab value="revisions">Revisões ({revisions.length})</CustomTabs.Tab>
@@ -350,10 +358,13 @@ export const ContractDetailPage = () => {
               {contract.baseCode} <span style={hint}>({contract.source})</span>
             </Field>
             <Field title="Vigência">
-              {formatDate(contract.effectiveFrom)} → {formatDate(contract.effectiveTo, "Indeterminada")}
+              {formatDate(contract.effectiveFrom)} →{" "}
+              {formatDate(contract.effectiveTo, "Indeterminada")}
             </Field>
             <Field title="Revisão vigente">
-              {contract.currentRevision ? `Revisão ${contract.currentRevision.revisionNumber}` : "Nenhuma aprovada"}
+              {contract.currentRevision
+                ? `Revisão ${contract.currentRevision.revisionNumber}`
+                : "Nenhuma aprovada"}
             </Field>
           </div>
           <Field title="Anexos">
@@ -376,8 +387,8 @@ export const ContractDetailPage = () => {
           </Field>
           {contract.status === "ACTIVE" || contract.status === "SUSPENDED" ? (
             <span style={hint}>
-              Uma nova revisão nasce aprovada, mas só passa a valer na data de início, aplicada
-              pelo job de ciclo de vida.
+              Uma nova revisão nasce aprovada, mas só passa a valer na data de início, aplicada pelo
+              job de ciclo de vida.
             </span>
           ) : null}
         </div>
