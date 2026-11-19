@@ -18,10 +18,9 @@ import {
 
 const validItem = (over: Partial<ItemForm> = {}): ItemForm => ({
   ...emptyItem(),
+  included: true,
   productId: "p1",
   productCode: "000000000012345",
-  poolId: "pool1",
-  accountingMeasure: "GSV",
   reservedCapacity: "1000.000",
   maximumCapacity: "1500.000",
   minimumQuota: "100.000",
@@ -32,9 +31,6 @@ const validItem = (over: Partial<ItemForm> = {}): ItemForm => ({
 
 const validForm = (over: Partial<ContractForm> = {}): ContractForm => ({
   ...emptyContractForm(),
-  internalCode: "CT-1",
-  contractNumber: "4600001234",
-  ownerId: "o1",
   source: "SRC",
   baseCode: "SSA",
   effectiveFrom: "2026-01-01",
@@ -81,72 +77,77 @@ describe("validateContractForm", () => {
     expect(validateContractForm(validForm(), OPTS)).toEqual({});
   });
 
-  it("exige dados gerais e ao menos 1 item", () => {
+  it("exige a base; itens são opcionais no formulário de contrato", () => {
     const e = validateContractForm(
-      validForm({ internalCode: "", ownerId: "", source: "", revision: { ...validForm().revision, items: [] } }),
+      validForm({ source: "", baseCode: "", revision: { ...validForm().revision, items: [] } }),
       OPTS,
     );
-    expect(e.internalCode).toBeTruthy();
-    // Depositante e Base não são obrigatórios por enquanto.
-    expect(e.ownerId).toBeUndefined();
-    expect(e.base).toBeUndefined();
-    expect(e["rev.items"]).toBeTruthy();
+    expect(e.base).toBeTruthy();
+    expect(e["rev.items"]).toBeUndefined();
   });
 
-  it("buildContractRequest omite depositante e base quando vazios", () => {
-    const empty = buildContractRequest(validForm({ ownerId: "", source: "", baseCode: "" }));
-    expect(empty).not.toHaveProperty("ownerId");
-    expect(empty).not.toHaveProperty("source");
-    expect(empty).not.toHaveProperty("baseCode");
-
-    const filled = buildContractRequest(validForm({ ownerId: "o-1", source: "SAP", baseCode: "C001" }));
-    expect(filled).toMatchObject({ ownerId: "o-1", source: "SAP", baseCode: "C001" });
+  it("criação sem itens não valida a revisão", () => {
+    const e = validateContractForm(validForm({ revision: emptyContractForm().revision }), OPTS);
+    expect(e).toEqual({});
   });
 
-  it("vigência: fim posterior ao início e revisão dentro do contrato", () => {
-    const e = validateContractForm(
-      validForm({
-        effectiveTo: "2025-12-31",
-        revision: { ...validForm().revision, effectiveFrom: "2025-06-01", effectiveUntil: "2027-01-01" },
-      }),
-      OPTS,
-    );
+  it("vigência: fim do contrato posterior ao início", () => {
+    const e = validateContractForm(validForm({ effectiveTo: "2025-12-31" }), OPTS);
     expect(e.effectiveTo).toBeTruthy();
-    expect(e["rev.effectiveFrom"]).toBeTruthy();
   });
 
-  it("contrato com fim exige revisão terminando até o fim do contrato", () => {
-    const f = validForm();
-    f.revision.effectiveUntil = "";
-    expect(validateContractForm(f, OPTS)["rev.effectiveUntil"]).toBeTruthy();
-    f.revision.effectiveUntil = "2027-01-01";
-    expect(validateContractForm(f, OPTS)["rev.effectiveUntil"]).toBeTruthy();
+  it("a revisão acompanha a vigência do contrato (sem datas próprias)", () => {
+    const f = validForm({ effectiveFrom: "2026-02-01", effectiveTo: "" });
+    f.revision.effectiveFrom = "";
+    f.revision.effectiveUntil = "2030-01-01";
+    expect(validateContractForm(f, OPTS)).toEqual({});
+    const body = buildContractRequest(f);
+    expect(body.revision).toMatchObject({ effectiveFrom: "2026-02-01T00:00:00.000Z" });
+    expect(body.revision!.effectiveUntil).toBeUndefined();
+    expect(body.revision!.justification).toBeUndefined();
   });
 
   it("item: capacidade máxima ≥ reservada e cota máxima ≥ mínima", () => {
-    const item = validItem({ maximumCapacity: "500.000", reservedCapacity: "1000.000", maximumQuota: "10", minimumQuota: "20" });
-    const e = validateContractForm(validForm({ revision: { ...validForm().revision, items: [item] } }), OPTS);
+    const item = validItem({
+      maximumCapacity: "500.000",
+      reservedCapacity: "1000.000",
+      maximumQuota: "10",
+      minimumQuota: "20",
+    });
+    const e = validateContractForm(
+      validForm({ revision: { ...validForm().revision, items: [item] } }),
+      OPTS,
+    );
     expect(e[`item.${item.key}.maximumCapacity`]).toBeTruthy();
     expect(e[`item.${item.key}.maximumQuota`]).toBeTruthy();
   });
 
   it("item: quantidade como número com vírgula é inválida", () => {
     const item = validItem({ reservedCapacity: "1,5" });
-    const e = validateContractForm(validForm({ revision: { ...validForm().revision, items: [item] } }), OPTS);
+    const e = validateContractForm(
+      validForm({ revision: { ...validForm().revision, items: [item] } }),
+      OPTS,
+    );
     expect(e[`item.${item.key}.reservedCapacity`]).toBeTruthy();
   });
 
-  it("item: exige ao menos 1 tipo de movimento; tanques podem ser []", () => {
-    const item = validItem({ allowedMovementTypeCodes: [], allowedTankCodes: [] });
-    const e = validateContractForm(validForm({ revision: { ...validForm().revision, items: [item] } }), OPTS);
+  it("item: exige ao menos 1 tipo de movimento", () => {
+    const item = validItem({ allowedMovementTypeCodes: [] });
+    const e = validateContractForm(
+      validForm({ revision: { ...validForm().revision, items: [item] } }),
+      OPTS,
+    );
     expect(e[`item.${item.key}.allowedMovementTypeCodes`]).toBeTruthy();
   });
 
-  it("um produto só pode aparecer uma vez por pool", () => {
+  it("um produto só pode aparecer uma vez na revisão", () => {
     const a = validItem();
     const b = validItem();
-    const e = validateContractForm(validForm({ revision: { ...validForm().revision, items: [a, b] } }), OPTS);
-    expect(e[`item.${b.key}.poolId`]).toBeTruthy();
+    const e = validateContractForm(
+      validForm({ revision: { ...validForm().revision, items: [a, b] } }),
+      OPTS,
+    );
+    expect(e[`item.${b.key}.productId`]).toBeTruthy();
   });
 
   it("nova revisão: justificativa obrigatória e início posterior às existentes", () => {
@@ -167,16 +168,57 @@ describe("validateContractForm", () => {
 });
 
 describe("buildContractRequest", () => {
-  it("monta o corpo sem campos extras e omite opcionais vazios", () => {
+  it("monta o corpo sem identificadores, depositante nem pool", () => {
     const body = buildContractRequest(validForm());
     expect(Object.keys(body).sort()).toEqual(
-      ["baseCode", "contractNumber", "effectiveFrom", "effectiveTo", "internalCode", "ownerId", "revision", "source"].sort(),
+      ["baseCode", "effectiveFrom", "effectiveTo", "revision", "source"].sort(),
     );
     expect(body.effectiveFrom).toBe("2026-01-01T00:00:00.000Z");
-    const item = body.revision.items[0];
+    const item = body.revision!.items[0];
     expect(item.reservedCapacity).toBe("1000.000");
     expect(item.minimumStock).toBeUndefined();
     expect(item).not.toHaveProperty("key");
+  });
+
+  it("itens vão com GSV fixo, sem pool, sem dados do cliente e com tanques []", () => {
+    const body = buildContractRequest(validForm());
+    const item = body.revision!.items[0];
+    expect(item.accountingMeasure).toBe("GSV");
+    expect(item.allowedTankCodes).toEqual([]);
+    for (const f of ["poolId", "customerProductCode", "customerProductDescription"]) {
+      expect(item).not.toHaveProperty(f);
+    }
+  });
+
+  it("sem itens (criação) omite `revision`", () => {
+    const body = buildContractRequest(validForm({ revision: emptyContractForm().revision }));
+    expect(body).not.toHaveProperty("revision");
+    expect(body).toMatchObject({ source: "SRC", baseCode: "SSA" });
+  });
+
+  it("só os itens marcados vão para a API e são validados", () => {
+    const off = validItem({ productId: "p2", included: false, reservedCapacity: "" });
+    const form = validForm({ revision: { ...validForm().revision, items: [validItem(), off] } });
+    expect(buildContractRequest(form).revision!.items).toHaveLength(1);
+    expect(validateContractForm(form, OPTS)).toEqual({});
+  });
+
+  it("só itens desmarcados: sem revisão no corpo", () => {
+    const form = validForm({
+      revision: { ...validForm().revision, items: [validItem({ included: false })] },
+    });
+    expect(buildContractRequest(form)).not.toHaveProperty("revision");
+  });
+
+  it("nova revisão exige ao menos um item marcado", () => {
+    const f = validForm();
+    f.revision.items = [validItem({ included: false })];
+    const e = validateContractForm(f, {
+      mode: "revision",
+      contractFrom: "2026-01-01",
+      contractTo: "2026-12-31",
+    });
+    expect(e["rev.items"]).toBeTruthy();
   });
 
   it("fim da vigência vazio fica indeterminado (omitido)", () => {
@@ -203,12 +245,20 @@ describe("allowedActions", () => {
   });
 
   it("PENDING_APPROVAL: aprovar exige approve; cancelar exige status", () => {
-    expect(allowedActions("PENDING_APPROVAL", { ...none, approve: true }).actions).toEqual(["approve"]);
-    expect(allowedActions("PENDING_APPROVAL", { ...none, status: true }).actions).toEqual(["cancel"]);
+    expect(allowedActions("PENDING_APPROVAL", { ...none, approve: true }).actions).toEqual([
+      "approve",
+    ]);
+    expect(allowedActions("PENDING_APPROVAL", { ...none, status: true }).actions).toEqual([
+      "cancel",
+    ]);
   });
 
   it("SUSPENDED e CLOSING", () => {
-    expect(allowedActions("SUSPENDED", all).actions).toEqual(["reactivate", "start-closing", "cancel"]);
+    expect(allowedActions("SUSPENDED", all).actions).toEqual([
+      "reactivate",
+      "start-closing",
+      "cancel",
+    ]);
     expect(allowedActions("CLOSING", all).actions).toEqual(["close"]);
   });
 
@@ -216,7 +266,11 @@ describe("allowedActions", () => {
     for (const s of ["CLOSED", "CANCELLED", "EXPIRED"] as ContractStatus[]) {
       expect(allowedActions(s, all)).toEqual({ edit: false, newRevision: false, actions: [] });
     }
-    expect(allowedActions("ACTIVE", none)).toEqual({ edit: false, newRevision: false, actions: [] });
+    expect(allowedActions("ACTIVE", none)).toEqual({
+      edit: false,
+      newRevision: false,
+      actions: [],
+    });
   });
 });
 

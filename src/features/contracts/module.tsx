@@ -7,6 +7,7 @@ import { ContractFormPage } from "./pages/ContractFormPage";
 import { ContractsPage } from "./pages/ContractsPage";
 import { CONTRACT_PERM } from "./permissions";
 import { ContractsService, type IContractsService } from "./services/ContractsService";
+import { FilesService, type IFilesService } from "./services/FilesService";
 import { OwnersService, type IOwnersService } from "./services/OwnersService";
 import { ReferenceService, type IReferenceService } from "./services/ReferenceService";
 
@@ -24,6 +25,7 @@ declare module "@core/ioc/registry" {
     contracts: IContractsService;
     owners: IOwnersService;
     contractsReference: IReferenceService;
+    contractsFiles: IFilesService;
   }
 }
 
@@ -55,6 +57,7 @@ const contractsModule: Module = {
       contracts: new ContractsService(c.get("http")),
       owners: new OwnersService(c.get("http")),
       contractsReference: new ReferenceService(c.get("http")),
+      contractsFiles: new FilesService(c.get("http")),
     }),
 };
 

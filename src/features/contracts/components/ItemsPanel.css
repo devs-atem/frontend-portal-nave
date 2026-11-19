@@ -1,0 +1,267 @@
+/* Seção "Itens do contrato": lista de itens à esquerda e detalhe à direita. */
+.nm-items {
+  --nm-items-accent: var(--atem-color-action-primary, #0d265e);
+  --nm-items-accent-soft: color-mix(in srgb, var(--nm-items-accent) 10%, #ffffff);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.nm-items__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.nm-items__heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.nm-items__badge {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--nm-items-accent-soft);
+  color: var(--nm-items-accent);
+}
+
+.nm-items__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #0d265e;
+}
+
+.nm-items__subtitle {
+  margin: 2px 0 0;
+  font-size: 13px;
+  font-weight: 400;
+  color: #5b6475;
+}
+
+.nm-items__body {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.nm-items__body--stacked {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* ── Lista ─────────────────────────────────────────────────────────────── */
+.nm-items__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nm-items__row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-right: 14px;
+  border: 1px solid #e2e6ee;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.nm-items__row--selected {
+  border-color: var(--nm-items-accent);
+  background: var(--nm-items-accent-soft);
+}
+
+.nm-items__pick {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px 8px 12px 12px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nm-items__number {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: #f1f3f8;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--nm-items-accent);
+}
+
+.nm-items__row--selected .nm-items__number {
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(13, 38, 94, 0.2);
+}
+
+.nm-items__number--error {
+  background: #fdecea;
+  color: #b42f2f;
+}
+
+.nm-items__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.nm-items__empty {
+  padding: 16px;
+  font-size: 13px;
+  color: #5b6475;
+}
+
+/* ── Detalhe ───────────────────────────────────────────────────────────── */
+.nm-items__detail {
+  container: nm-item-detail / inline-size;
+  min-width: 0;
+  border: 1px solid #e2e6ee;
+  border-radius: 12px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.nm-items__detail-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  background: var(--nm-items-accent-soft);
+}
+
+.nm-items__detail-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.nm-items__detail-icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: #c4c9d4;
+  color: #3d4556;
+}
+
+.nm-items__detail-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
+  font-weight: 700;
+  color: #0d265e;
+}
+
+.nm-items__detail-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 4px 18px 18px;
+}
+
+.nm-items__row-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.nm-items__row-grid--product {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+}
+
+.nm-items__row-grid--quantities {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.nm-items__row-grid--percent {
+  grid-template-columns: minmax(0, 1fr) 1px minmax(0, 1fr);
+  align-items: stretch;
+}
+
+.nm-items__divider {
+  background: #d8dce6;
+}
+
+/* Detalhe estreito: campos em menos colunas. */
+@container nm-item-detail (max-width: 680px) {
+  .nm-items__row-grid--product {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .nm-items__row-grid--quantities {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .nm-items__row-grid--percent {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .nm-items__divider {
+    display: none;
+  }
+}
+
+.nm-items__empty-detail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 40px 20px;
+  color: #5b6475;
+  text-align: center;
+}
+
+/* Coluna da esquerda: busca e lista. */
+.nm-items__sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.nm-items__check {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--nm-items-accent);
+  cursor: pointer;
+}
+
+.nm-items__check:disabled {
+  cursor: not-allowed;
+}

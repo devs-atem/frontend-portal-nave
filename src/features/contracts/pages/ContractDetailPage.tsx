@@ -18,6 +18,8 @@ import { OwnerProductsPanel } from "../components/OwnerProductsPanel";
 import { useContractPermissions } from "../permissions";
 import {
   CONTRACT_ACTION_LABEL,
+  DEFAULT_OWNER_INTERNAL_CODE,
+  type AttachmentResponse,
   type ContractAction,
   type ContractActionRequest,
   type ContractItemResponse,
@@ -71,7 +73,7 @@ const buildItemColumns = (
       </span>
     ),
   },
-  { id: "pool", label: "Pool", accessor: (i) => poolLabel(i.poolId) },
+  { id: "pool", label: "Pool", accessor: (i) => (i.poolId ? poolLabel(i.poolId) : "Padrão") },
   { id: "measure", label: "Medida", accessor: (i) => i.accountingMeasure },
   { id: "reserved", label: "Cap. reservada", align: "right", accessor: (i) => formatQty(i.reservedCapacity) },
   { id: "max", label: "Cap. máxima", align: "right", accessor: (i) => formatQty(i.maximumCapacity) },
@@ -122,6 +124,7 @@ export const ContractDetailPage = () => {
   const owners = useIoC("owners");
   const clientsSvc = useIoC("clientRegistration");
   const reference = useIoC("contractsReference");
+  const files = useIoC("contractsFiles");
   const perms = useContractPermissions();
 
   const [contract, setContract] = useState<ContractResponse | null>(null);
@@ -164,9 +167,11 @@ export const ContractDetailPage = () => {
   }, [contracts, id, reloadToken]);
 
   // Depositante completo e clientes (best effort: sem acesso, a tela segue com o embutido).
+  // O depositante padrão é um placeholder: não há o que buscar nem exibir.
   const ownerId = contract?.ownerId;
+  const isDefaultOwner = contract?.owner?.internalCode === DEFAULT_OWNER_INTERNAL_CODE;
   useEffect(() => {
-    if (!ownerId) return;
+    if (!ownerId || isDefaultOwner) return;
     let cancelled = false;
     void Promise.allSettled([owners.get(ownerId), clientsSvc.list()]).then(([o, c]) => {
       if (cancelled) return;
@@ -176,7 +181,7 @@ export const ContractDetailPage = () => {
     return () => {
       cancelled = true;
     };
-  }, [owners, clientsSvc, ownerId]);
+  }, [owners, clientsSvc, ownerId, isDefaultOwner]);
 
   // Nomes de pool e produto (best effort). O contrato devolve só `poolId`; sem
   // `app:custody:pool:read` (403) cai no início do id.
@@ -250,6 +255,20 @@ export const ContractDetailPage = () => {
     (prodId) => productNames.get(prodId),
   );
 
+  const downloadAttachment = async (att: AttachmentResponse): Promise<void> => {
+    try {
+      const blob = await files.download(att.id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = att.fileName;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error("Não foi possível baixar o anexo.");
+    }
+  };
+
   const confirmAction = async (body: ContractActionRequest): Promise<void> => {
     if (!action) return;
     try {
@@ -305,7 +324,7 @@ export const ContractDetailPage = () => {
         <CustomTabs.List aria-label="Alternar seção do contrato">
           <CustomTabs.Tab value="summary">Resumo</CustomTabs.Tab>
           <CustomTabs.Tab value="revisions">Revisões ({revisions.length})</CustomTabs.Tab>
-          <CustomTabs.Tab value="owner">Depositante</CustomTabs.Tab>
+          {!isDefaultOwner && <CustomTabs.Tab value="owner">Depositante</CustomTabs.Tab>}
         </CustomTabs.List>
       </CustomTabs>
 
@@ -321,8 +340,12 @@ export const ContractDetailPage = () => {
             <Field title="Status">
               <ContractStatusTag status={contract.status} />
             </Field>
-            <Field title="Depositante">{ownerView?.legalName ?? contract.ownerId}</Field>
-            <Field title="Cliente (por CNPJ)">{client?.name ?? "—"}</Field>
+            {!isDefaultOwner && (
+              <>
+                <Field title="Depositante">{ownerView?.legalName ?? contract.ownerId}</Field>
+                <Field title="Cliente (por CNPJ)">{client?.name ?? "—"}</Field>
+              </>
+            )}
             <Field title="Base">
               {contract.baseCode} <span style={hint}>({contract.source})</span>
             </Field>
@@ -333,6 +356,24 @@ export const ContractDetailPage = () => {
               {contract.currentRevision ? `Revisão ${contract.currentRevision.revisionNumber}` : "Nenhuma aprovada"}
             </Field>
           </div>
+          <Field title="Anexos">
+            {(contract.attachments ?? []).length === 0 ? (
+              "Nenhum anexo"
+            ) : (
+              <span style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                {(contract.attachments ?? []).map((att) => (
+                  <Button
+                    key={att.id}
+                    variant="outlined"
+                    size="sm"
+                    onClick={() => void downloadAttachment(att)}
+                  >
+                    {att.fileName}
+                  </Button>
+                ))}
+              </span>
+            )}
+          </Field>
           {contract.status === "ACTIVE" || contract.status === "SUSPENDED" ? (
             <span style={hint}>
               Uma nova revisão nasce aprovada, mas só passa a valer na data de início, aplicada
@@ -358,7 +399,7 @@ export const ContractDetailPage = () => {
           ))
         ))}
 
-      {tab === "owner" && (
+      {tab === "owner" && !isDefaultOwner && (
         <div style={section}>
           <strong style={{ color: "#0D265E" }}>{ownerView?.legalName ?? "Depositante"}</strong>
           <div
