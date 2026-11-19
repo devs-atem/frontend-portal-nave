@@ -181,14 +181,13 @@ describe("submitContractForm", () => {
     expect(contracts.update).not.toHaveBeenCalled();
   });
 
-  it("revision sem id não grava nada", async () => {
-    const { d, contracts, files } = deps();
+  it("revision sem id retorna null e não cria revisão (a guarda do upload é coberta pelo teste de edit)", async () => {
+    const { d, contracts } = deps();
     const result = await submitContractForm(
-      { mode: "revision", form: form(), attachment: file },
+      { mode: "revision", form: form(), attachment: null },
       d,
     );
     expect(result).toBeNull();
-    expect(files.upload).not.toHaveBeenCalled();
     expect(contracts.createRevision).not.toHaveBeenCalled();
   });
 });
